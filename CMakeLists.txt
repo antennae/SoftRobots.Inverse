@@ -59,6 +59,11 @@ set(HEADER_FILES
     ${SRC_DIR}/component/constraint/SurfacePressureSensor.h
     ${SRC_DIR}/component/constraint/SurfacePressureSensor.inl
 
+    ${SRC_DIR}/component/constraint/SurfaceSlidingSensor.h
+    ${SRC_DIR}/component/constraint/SurfaceSlidingSensor.inl
+    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.h
+    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.inl
+
     # EQUALITY
     ${SRC_DIR}/component/behavior/Equality.h
     ${SRC_DIR}/component/behavior/Equality.inl
@@ -107,6 +112,9 @@ set(SOURCE_FILES
 
     ${SRC_DIR}/component/constraint/CableSensor.cpp
     ${SRC_DIR}/component/constraint/SurfacePressureSensor.cpp
+    
+    ${SRC_DIR}/component/constraint/SurfaceSlidingSensor.cpp
+    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.cpp
 
     # EQUALITY
     ${SRC_DIR}/component/behavior/Equality.cpp
