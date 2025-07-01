@@ -66,22 +66,27 @@ void SurfaceSlidingEffector<DataTypes>::getConstraintViolation(
     ReadAccessor<sofa::Data<sofa::type::vector<Real>>> currentDistances = m_distance;
     const auto& targets = getTargetDistance();
     
-    // Calculate constraint violation as difference between current and target
+    const auto& constraintIndex = sofa::helper::getReadAccessor(this->d_constraintIndex);
+    
+    // Use local index counter like PositionEffector does
+    unsigned int index = 0;
     for (size_t i = 0; i < d_pointIndex.getValue().size(); i++)
     {
         Real currentDistance = (i < currentDistances.size()) ? currentDistances[i] : 0.0;
         Real targetDistance = (i < targets.size()) ? targets[i] : 0.0;
         Real violation = currentDistance - targetDistance;
         
-        // Add velocity term if provided
+        // Add velocity term if provided - use local index
         if (Jdx != nullptr)
         {
-            violation += Jdx->element(this->d_constraintIndex.getValue() + i);
+            violation += Jdx->element(index);
         }
         
-        resV->set(this->d_constraintIndex.getValue() + i, violation);
+        resV->set(constraintIndex + index, violation);
+        index++;  // Increment local index
     }
 }
+
 
 template <class DataTypes>
 void SurfaceSlidingEffector<DataTypes>::updateTargetDistance()
