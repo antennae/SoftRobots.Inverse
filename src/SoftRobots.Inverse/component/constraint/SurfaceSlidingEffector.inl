@@ -3,6 +3,8 @@
 #include <SoftRobots.Inverse/component/constraint/SurfaceSlidingEffector.h>
 #include <sofa/core/objectmodel/ComponentState.h>
 
+#include <sofa/helper/AdvancedTimer.h>
+
 namespace softrobotsinverse::constraint {
 
 using sofa::core::objectmodel::ComponentState;
@@ -39,15 +41,15 @@ void SurfaceSlidingEffector<DataTypes>::init()
         const auto& pointIndices = d_pointIndex.getValue();
         sofa::type::vector<Real> initialTargets(pointIndices.size(), 0.0);
         
-        // Get current distances from the constraint's m_distance
-        ReadAccessor<sofa::Data<sofa::type::vector<Real>>> currentDistances = m_distance;
-        if (currentDistances.size() >= pointIndices.size())
-        {
-            for (size_t i = 0; i < pointIndices.size(); i++)
-            {
-                initialTargets[i] = currentDistances[i];
-            }
-        }
+        // // Get current distances from the constraint's m_distance
+        // ReadAccessor<sofa::Data<sofa::type::vector<Real>>> currentDistances = m_distance;
+        // if (currentDistances.size() >= pointIndices.size())
+        // {
+        //     for (size_t i = 0; i < pointIndices.size(); i++)
+        //     {
+        //         initialTargets[i] = currentDistances[i];
+        //     }
+        // }
         
         d_targetDistance.setValue(initialTargets);
     }
@@ -116,13 +118,13 @@ void SurfaceSlidingEffector<DataTypes>::updateTargetDistance()
         }
     }
     
-    d_targetDistance.setValue(newTargets);
+    d_intermediateTargetDistance.setValue(newTargets);
 }
 
 template <class DataTypes>
 sofa::type::vector<typename DataTypes::Real> SurfaceSlidingEffector<DataTypes>::getTargetDistance()
 {
-    return d_targetDistance.getValue();
+    return d_intermediateTargetDistance.getValue();
 }
 
 } // namespace softrobotsinverse::constraint

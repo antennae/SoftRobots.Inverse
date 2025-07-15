@@ -46,6 +46,7 @@ public:
 
 protected:
   sofa::Data<sofa::type::vector<Real>> d_targetDistance;
+  sofa::Data<sofa::type::vector<Real>> d_intermediateTargetDistance;
 
 private:
   void updateTargetDistance();
