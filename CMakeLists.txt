@@ -43,6 +43,8 @@ set(HEADER_FILES
     ${SRC_DIR}/component/constraint/ForceSurfaceActuator.inl
     ${SRC_DIR}/component/constraint/ForcePointActuator.h
     ${SRC_DIR}/component/constraint/ForcePointActuator.inl
+    ${SRC_DIR}/component/constraint/ForceLocalizationActuator.h
+    ${SRC_DIR}/component/constraint/ForceLocalizationActuator.inl
     ${SRC_DIR}/component/constraint/JointActuator.h
     ${SRC_DIR}/component/constraint/JointActuator.inl
     ${SRC_DIR}/component/constraint/SlidingActuator.h
@@ -103,6 +105,7 @@ set(SOURCE_FILES
     ${SRC_DIR}/component/constraint/CableActuator.cpp
     ${SRC_DIR}/component/constraint/ForceSurfaceActuator.cpp
     ${SRC_DIR}/component/constraint/ForcePointActuator.cpp
+    ${SRC_DIR}/component/constraint/ForceLocalizationActuator.cpp
     ${SRC_DIR}/component/constraint/JointActuator.cpp
     ${SRC_DIR}/component/constraint/SlidingActuator.cpp
     ${SRC_DIR}/component/constraint/SurfacePressureActuator.cpp
