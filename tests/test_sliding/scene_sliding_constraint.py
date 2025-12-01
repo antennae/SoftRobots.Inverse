@@ -52,7 +52,7 @@ class InvSceneController(Sofa.Core.Controller):
 def createScene(rootNode: Sofa.Core.Node) -> Sofa.Core.Node:
     """Set up the scene configuration."""
     add_header(root_node=rootNode, dt=0.01, inverse=FLAG_INVERSE)
-    solver_node = add_solver(rootNode, iterative=True)
+    solver_node = add_solver(rootNode, iterative=False)
 
     mesh_path = './'
     volume_config = VolumeConfig(
