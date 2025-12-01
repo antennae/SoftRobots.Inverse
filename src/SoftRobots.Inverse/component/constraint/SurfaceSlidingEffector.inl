@@ -4,12 +4,13 @@
 #include <sofa/core/objectmodel/ComponentState.h>
 
 #include <sofa/helper/AdvancedTimer.h>
-
+#include <sofa/helper/ScopedAdvancedTimer.h>
 namespace softrobotsinverse::constraint {
 
 using sofa::core::objectmodel::ComponentState;
 using sofa::helper::WriteAccessor;
 using sofa::helper::ReadAccessor;
+
 
 template <class DataTypes>
 SurfaceSlidingEffector<DataTypes>::SurfaceSlidingEffector(MechanicalState *object)
@@ -61,6 +62,8 @@ void SurfaceSlidingEffector<DataTypes>::getConstraintViolation(
     sofa::linearalgebra::BaseVector *resV,
     const sofa::linearalgebra::BaseVector *Jdx)
 {
+
+    sofa::helper::AdvancedTimer::stepBegin("SurfaceSlidingEffector::getConstraintViolation");
     // Update targets with motion limiting if enabled
     updateTargetDistance();
     
@@ -87,12 +90,15 @@ void SurfaceSlidingEffector<DataTypes>::getConstraintViolation(
         resV->set(constraintIndex + index, violation);
         index++;  // Increment local index
     }
+
+    sofa::helper::AdvancedTimer::stepEnd("SurfaceSlidingEffector::getConstraintViolation");
 }
 
 
 template <class DataTypes>
 void SurfaceSlidingEffector<DataTypes>::updateTargetDistance()
 {
+    sofa::helper::AdvancedTimer::stepBegin("SurfaceSlidingEffector::updateTargetDistance");
     if (!d_limitShiftToTarget.getValue())
         return;
         
@@ -119,6 +125,7 @@ void SurfaceSlidingEffector<DataTypes>::updateTargetDistance()
     }
     
     d_intermediateTargetDistance.setValue(newTargets);
+    sofa::helper::AdvancedTimer::stepEnd("SurfaceSlidingEffector::updateTargetDistance");
 }
 
 template <class DataTypes>
