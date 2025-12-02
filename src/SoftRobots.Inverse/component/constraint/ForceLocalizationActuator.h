@@ -67,6 +67,8 @@ public:
                       sofa::type::vector<double> &delta) override;
     ////////////////////////////////////////////////////////////////////////
 
+    // Real getSparsity() const;
+
 protected:
 
     sofa::Data<sofa::type::vector<sofa::Index>>  d_indices;
@@ -81,6 +83,7 @@ protected:
     
     sofa::Data<Deriv>                            d_direction;
     sofa::Data<Real>                             d_epsilon;
+    // sofa::Data<Real>                             d_sparsity; // L1 regularization term
 
     sofa::Data<bool>                             d_showForce;
     sofa::Data<Real>                             d_visuScale;

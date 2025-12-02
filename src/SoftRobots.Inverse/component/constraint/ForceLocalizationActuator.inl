@@ -40,6 +40,10 @@ ForceLocalizationActuator<DataTypes>::ForceLocalizationActuator(MechanicalState*
     , d_epsilon(this->initData(&d_epsilon, Real(1e-3), "penalty",
                            "Regularization term. Higher value promotes smaller forces (sparsity)."))
 
+    // , d_sparsity(this->initData(&d_sparsity, Real(0.0), "sparsity",
+    //                        "L1 Regularization term to promote sparsity (selection). Adds a linear cost to the force magnitude. \n"
+    //                        "Ideally used with unilateral constraints (minForce >= 0)."))
+
     , d_showForce(this->initData(&d_showForce, false, "showForce",
                            "Visualize the estimated forces"))
 
@@ -49,6 +53,12 @@ ForceLocalizationActuator<DataTypes>::ForceLocalizationActuator(MechanicalState*
 {
     setUpData();
 }
+
+// template<class DataTypes>
+// typename DataTypes::Real ForceLocalizationActuator<DataTypes>::getSparsity() const
+// {
+//     return d_sparsity.getValue();
+// }
 
 
 template<class DataTypes>

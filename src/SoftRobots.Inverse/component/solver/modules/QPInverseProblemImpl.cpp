@@ -32,6 +32,7 @@
 
 #include <SoftRobots.Inverse/component/solver/modules/QPInverseProblemImpl.h>
 #include <SoftRobots.Inverse/component/solver/modules/NLCPSolver.h>
+#include <SoftRobots.Inverse/component/constraint/ForceLocalizationActuator.h> // Added to access getSparsity()
 
 #include <sofa/helper/AdvancedTimer.h>
 #include <sofa/component/collision/response/contact/CollisionResponse.h>
@@ -42,6 +43,10 @@ namespace softrobotsinverse::solver::module
 {
 
 using softrobots::behavior::SoftRobotsBaseConstraint;
+using softrobotsinverse::constraint::ForceLocalizationActuator; // Added
+using sofa::defaulttype::Vec3Types; // Added
+using sofa::defaulttype::Rigid3Types; // Added
+
 using sofa::type::vector;
 using std::cout ;
 using std::endl ;
@@ -215,12 +220,20 @@ void QPInverseProblemImpl::buildQPMatrices()
     for (unsigned int k=0; k<dim; k++)
     {
         double currentEpsilon = m_epsilon;
+        double currentSparsity = 0.01;
 
         if(k<nbActuators) // actuators
         {
             SoftRobotsBaseConstraint* ac;
             ac = m_qpCLists->actuators[actuatorsId];
             if(ac->hasEpsilon()) currentEpsilon = ac->getEpsilon();
+
+            // // Check for sparsity parameter (L1 regularization) for ForceLocalizationActuator
+            // if (auto fla = dynamic_cast<ForceLocalizationActuator<Vec3Types>*>(ac)) {
+            //     currentSparsity = fla->getSparsity();
+            // } else if (auto fla = dynamic_cast<ForceLocalizationActuator<Rigid3Types>*>(ac)) {
+            //     currentSparsity = fla->getSparsity();
+            // }
 
             actuatorsNbLines++;
             if(actuatorsNbLines == ac->getNbLines())
@@ -265,9 +278,14 @@ void QPInverseProblemImpl::buildQPMatrices()
         // Add Ridge Regularization (Identity) on diagonal to ensure positive definiteness
         // and improve localization for uncoupled variables.
         // Scale by weight^2 to match Q units.
-        double ridgeReg = currentEpsilon * weight * weight;
-        if (ridgeReg < 1e-12) ridgeReg = 1e-12;
-        m_qpSystem->Q[k][k] += ridgeReg;
+        // double ridgeReg = currentEpsilon * weight * weight;
+        // if (ridgeReg < 1e-12) ridgeReg = 1e-12;
+        // m_qpSystem->Q[k][k] += ridgeReg;
+
+        // Add Sparsity (L1 Regularization) to the linear term
+        // if (currentSparsity > 0.0) {
+        //     m_qpSystem->c[k] += currentSparsity * weight;
+        // }
     }
 
 }
