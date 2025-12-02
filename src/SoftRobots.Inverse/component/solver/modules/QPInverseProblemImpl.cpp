@@ -214,10 +214,14 @@ void QPInverseProblemImpl::buildQPMatrices()
 
     for (unsigned int k=0; k<dim; k++)
     {
+        double currentEpsilon = m_epsilon;
+
         if(k<nbActuators) // actuators
         {
             SoftRobotsBaseConstraint* ac;
             ac = m_qpCLists->actuators[actuatorsId];
+            if(ac->hasEpsilon()) currentEpsilon = ac->getEpsilon();
+
             actuatorsNbLines++;
             if(actuatorsNbLines == ac->getNbLines())
             {
@@ -236,6 +240,8 @@ void QPInverseProblemImpl::buildQPMatrices()
         {
             SoftRobotsBaseConstraint* ac;
             ac = m_qpCLists->equality[equalityId];
+            if(ac->hasEpsilon()) currentEpsilon = ac->getEpsilon();
+
             equalitysNbLines++;
             if(equalitysNbLines == ac->getNbLines())
             {
@@ -255,6 +261,13 @@ void QPInverseProblemImpl::buildQPMatrices()
             for(unsigned int j=0; j<dim; j++)
                 m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
         }
+
+        // Add Ridge Regularization (Identity) on diagonal to ensure positive definiteness
+        // and improve localization for uncoupled variables.
+        // Scale by weight^2 to match Q units.
+        double ridgeReg = currentEpsilon * weight * weight;
+        if (ridgeReg < 1e-12) ridgeReg = 1e-12;
+        m_qpSystem->Q[k][k] += ridgeReg;
     }
 
 }
