@@ -67,7 +67,7 @@ public:
                       sofa::type::vector<double> &delta) override;
     ////////////////////////////////////////////////////////////////////////
 
-    // Real getSparsity() const;
+    double getSparsity() const; 
 
 protected:
 
@@ -83,7 +83,7 @@ protected:
     
     sofa::Data<Deriv>                            d_direction;
     sofa::Data<Real>                             d_epsilon;
-    // sofa::Data<Real>                             d_sparsity; // L1 regularization term
+    sofa::Data<Real>                             d_sparsity; // L1 regularization term
 
     sofa::Data<bool>                             d_showForce;
     sofa::Data<Real>                             d_visuScale;
@@ -105,8 +105,6 @@ protected:
     void initLimit();
     void initData();
     void updateLimit();
-
-private:
 
     void setUpData();
 
