@@ -423,7 +423,7 @@ void ForceLocalizationActuator<DataTypes>::draw(const VisualParams* vparams)
             {
                 // Draw arrow proportional to force
                 vparams->drawTool()->drawArrow(position, position + forceVec * visuScale, 
-                                             visuScale * 0.2, color, 4);
+                                             std::max(visuScale *0.2, 0.2 ), color, 4);
             }
         }
     }
