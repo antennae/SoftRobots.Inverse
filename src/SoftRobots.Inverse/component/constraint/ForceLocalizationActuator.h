@@ -68,6 +68,7 @@ public:
     ////////////////////////////////////////////////////////////////////////
 
     double getSparsity() const; 
+    double getRidge() const;
 
 protected:
 
@@ -84,6 +85,7 @@ protected:
     sofa::Data<Deriv>                            d_direction;
     sofa::Data<Real>                             d_epsilon;
     sofa::Data<Real>                             d_sparsity; // L1 regularization term
+    sofa::Data<Real>                             d_ridge;   // L2 regularization term
 
     sofa::Data<bool>                             d_showForce;
     sofa::Data<Real>                             d_visuScale;

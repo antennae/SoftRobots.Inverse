@@ -229,11 +229,14 @@ void QPInverseProblemImpl::buildQPMatrices()
             if(ac->hasEpsilon()) currentEpsilon = ac->getEpsilon();
 
             // Check for sparsity parameter (L1 regularization) for ForceLocalizationActuator
-            double currentSparsity = 0.0; // Declare and initialize currentSparsity
+            double currentSparsity = 0.0; 
+            double currentRidge = 0.0;
             if (auto fla = dynamic_cast<ForceLocalizationActuator<Vec3Types>*>(ac)) {
                 currentSparsity = fla->getSparsity();
+                currentRidge = fla->getRidge();
             } else if (auto fla = dynamic_cast<ForceLocalizationActuator<Rigid3Types>*>(ac)) {
                 currentSparsity = fla->getSparsity();
+                currentRidge = fla->getRidge();
             }
 
             actuatorsNbLines++;
@@ -252,9 +255,11 @@ void QPInverseProblemImpl::buildQPMatrices()
             // Add Sparsity (L1 Regularization) to the linear term
             if (currentSparsity > 0.0) {
                 m_qpSystem->c[k] += currentSparsity; // Direct addition, no weight scaling
-                // Add small Ridge (L2) term for stability (Elastic Net). 
-                // Scaled to be significant only at large forces (approx 1e6) to prevent instability without destroying sparsity.
-                m_qpSystem->Q[k][k] += 1e-6 * currentSparsity; 
+            }
+            
+            // Add Ridge (L2 Regularization) to the diagonal for stability
+            if (currentRidge > 0.0) {
+                m_qpSystem->Q[k][k] += currentRidge; // Direct addition, no weight scaling
             }
         }
         else if (k<nbActuators+nbEquality)
