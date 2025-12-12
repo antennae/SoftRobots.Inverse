@@ -30,6 +30,10 @@ set(HEADER_FILES
     ${SRC_DIR}/component/constraint/PositionEffector.inl
     ${SRC_DIR}/component/constraint/VolumeEffector.h
     ${SRC_DIR}/component/constraint/VolumeEffector.inl
+    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.h
+    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.inl
+    ${SRC_DIR}/component/constraint/SurfacePressureEffector.h
+    ${SRC_DIR}/component/constraint/SurfacePressureEffector.inl
 
     # ACTUATOR
     ${SRC_DIR}/component/behavior/Actuator.h
@@ -63,8 +67,7 @@ set(HEADER_FILES
 
     ${SRC_DIR}/component/constraint/SurfaceSlidingSensor.h
     ${SRC_DIR}/component/constraint/SurfaceSlidingSensor.inl
-    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.h
-    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.inl
+
 
     # EQUALITY
     ${SRC_DIR}/component/behavior/Equality.h
@@ -97,6 +100,8 @@ set(SOURCE_FILES
     ${SRC_DIR}/component/constraint/CableEffector.cpp
     ${SRC_DIR}/component/constraint/PositionEffector.cpp
     ${SRC_DIR}/component/constraint/VolumeEffector.cpp
+    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.cpp
+    ${SRC_DIR}/component/constraint/SurfacePressureEffector.cpp
 
     # ACTUATOR
     ${SRC_DIR}/component/behavior/Actuator.cpp
@@ -117,7 +122,7 @@ set(SOURCE_FILES
     ${SRC_DIR}/component/constraint/SurfacePressureSensor.cpp
     
     ${SRC_DIR}/component/constraint/SurfaceSlidingSensor.cpp
-    ${SRC_DIR}/component/constraint/SurfaceSlidingEffector.cpp
+
 
     # EQUALITY
     ${SRC_DIR}/component/behavior/Equality.cpp
