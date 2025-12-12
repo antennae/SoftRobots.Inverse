@@ -5,11 +5,15 @@
 
 #include <sofa/helper/AdvancedTimer.h>
 #include <sofa/helper/ScopedAdvancedTimer.h>
+#include <sofa/core/topology/BaseMeshTopology.h>
+#include <sofa/type/Vec.h>
+
 namespace softrobotsinverse::constraint {
 
 using sofa::core::objectmodel::ComponentState;
 using sofa::helper::ReadAccessor;
 using sofa::helper::WriteAccessor;
+using sofa::core::topology::BaseMeshTopology;
 
 template <class DataTypes>
 SurfacePressureEffector<DataTypes>::SurfacePressureEffector(
@@ -19,7 +23,8 @@ SurfacePressureEffector<DataTypes>::SurfacePressureEffector(
       d_targetPressure(initData(&d_targetPressure, "targetPressure",
                                 "Target pressure for the cavity")),
       d_initPressure(initData(&d_initPressure, (Real)0.0, "initPressure",
-                              "Initial pressure in the cavity")) {}
+                              "Initial pressure in the cavity")),
+      d_weight(initData(&d_weight, (Real)1.0, "weight", "Weight of the constraint")) {}
 
 template <class DataTypes>
 SurfacePressureEffector<DataTypes>::~SurfacePressureEffector() {}
@@ -32,27 +37,9 @@ template <class DataTypes> void SurfacePressureEffector<DataTypes>::init() {
   if (this->d_componentState.getValue() != ComponentState::Valid)
     return;
 
-  d_pressure.setValue(d_initPressure.getValue());
+  // d_pressure.setValue(d_initPressure.getValue()); // d_pressure is read-only in base class
 
-  // Initialize target distances with current distances if not set
-  //   if (!d_targetPressure.isSet()) {
-  // const auto &pointIndices = d_pointIndex.getValue();
-  // sofa::type::vector<Real> initialTargets(pointIndices.size(), 0.0);
 
-  // // Get current distances from the constraint's m_distance
-  // ReadAccessor<sofa::Data<sofa::type::vector<Real>>> currentDistances =
-  // m_distance; if (currentDistances.size() >= pointIndices.size())
-  // {
-  //     for (size_t i = 0; i < pointIndices.size(); i++)
-  //     {
-  //         initialTargets[i] = currentDistances[i];
-  //     }
-  // }
-
-  // d_targetPressure.setValue(0);
-  // d_cavityVolume.setValue(getCavityVolume(m_state->readPositions().ref()));
-  // m_targetVolume.setValue(d_cavityVolume.getValue());
-  //   }
 
   ReadAccessor<sofa::Data<VecCoord>> positions =
       *m_state->read(sofa::core::vec_id::read_access::position);
@@ -68,54 +55,37 @@ void SurfacePressureEffector<DataTypes>::getConstraintViolation(
 
   sofa::helper::AdvancedTimer::stepBegin(
       "SurfacePressureEffector::getConstraintViolation");
-  // Update targets with motion limiting if enabled
-  //   updateTargetDistance();
-
-  //   // Get current distances from the base constraint
-  //   ReadAccessor<sofa::Data<sofa::type::vector<Real>>> currentDistances =
-  //       m_distance;
-  //   const auto &targets = getTargetDistance();
 
   const auto &constraintIndex =
       sofa::helper::getReadAccessor(this->d_constraintIndex);
-
-  //   // Use local index counter like PositionEffector does
-  //   unsigned int index = 0;
-  //   for (size_t i = 0; i < d_pointIndex.getValue().size(); i++) {
-  //     Real currentDistance =
-  //         (i < currentDistances.size()) ? currentDistances[i] : 0.0;
-  //     Real targetDistance = (i < targets.size()) ? targets[i] : 0.0;
-  //     Real violation = currentDistance - targetDistance;
-
-  //     // Add velocity term if provided - use local index
-  //     if (Jdx != nullptr) {
-  //       violation += Jdx->element(index);
-  //     }
-
-  //     resV->set(constraintIndex + index, violation);
-  //     index++; // Increment local index
-  //   }
 
   double v = getCavityVolume(m_state->readPositions().ref());
   d_cavityVolume.setValue(v);
 
   // Update pressure based on Boyle's Law: P * V = P_init * V_init
-  if (v > 1e-9) {
-    d_pressure.setValue(d_initPressure.getValue() *
-                        d_initialCavityVolume.getValue() / v);
+  // This logic calculates what the target VOLUME should be to achieve d_targetPressure
+  // assuming P*V = const. 
+  
+  // Actually, d_pressure is OUTPUT. 
+  // We want to force the volume to be such that P = targetPressure.
+  // V_target = (P_init * V_init) / P_target
+  
+  // Wait, if d_pressure.setValue logic was commented out in init, maybe we don't track current pressure here?
+  // But we have d_initPressure.
+  
+  Real finalTargetVolume = 0;
+  if (std::abs(d_targetPressure.getValue()) > 1e-9) {
+      finalTargetVolume = (d_initPressure.getValue() * d_initialCavityVolume.getValue()) / d_targetPressure.getValue();
   }
 
-//   std::cout << "Cavity Volume: " << d_cavityVolume.getValue() << std::endl;
-//   std::cout << "current pressure: " << d_pressure.getValue() << std::endl;
+  // Use Effector's getTarget to handle smoothing/limiting
+  Real smoothedTargetVolume = this->getTarget(finalTargetVolume, d_cavityVolume.getValue());
 
-//   std::cout << "Target Pressure: " << d_targetPressure.getValue() << std::endl;
-//   std::cout << "Target Volume: " << m_targetVolume.getValue() << std::endl;
+  m_targetVolume.setValue(smoothedTargetVolume);
 
-  m_targetVolume.setValue((d_pressure.getValue() * d_cavityVolume.getValue()) /
-                          d_targetPressure.getValue());
-
+  // Apply weight to the violation
   Real dfree =
-      Jdx->element(0) + d_cavityVolume.getValue() - m_targetVolume.getValue();
+      Jdx->element(0) + (d_cavityVolume.getValue() - m_targetVolume.getValue()) * d_weight.getValue();
 
   resV->set(constraintIndex, dfree);
 
@@ -123,44 +93,72 @@ void SurfacePressureEffector<DataTypes>::getConstraintViolation(
       "SurfacePressureEffector::getConstraintViolation");
 }
 
-// template <class DataTypes>
-// void SurfacePressureEffector<DataTypes>::updateTargetDistance() {
-//   sofa::helper::AdvancedTimer::stepBegin(
-//       "SurfacePressureEffector::updateTargetDistance");
-//   if (!d_limitShiftToTarget.getValue())
-//     return;
+template<class DataTypes>
+void SurfacePressureEffector<DataTypes>::buildConstraintMatrix(const ConstraintParams* cParams,
+                                                            sofa::Data<MatrixDeriv> &cMatrix,
+                                                            unsigned int &cIndex,
+                                                            const sofa::Data<sofa::type::vector<typename DataTypes::Coord>> &x)
+{
+    if(this->d_componentState.getValue() != ComponentState::Valid)
+            return ;
 
-//   const auto &currentTargets = d_targetDistance.getValue();
-//   sofa::type::vector<Real> newTargets = currentTargets;
-//   Real maxShift = d_maxShiftToTarget.getValue();
+    SOFA_UNUSED(cParams);
 
-//   // Get current distances from the constraint
-//   ReadAccessor<sofa::Data<sofa::type::vector<Real>>> currentDistances =
-//       m_distance;
+    this->d_constraintIndex.setValue(cIndex);
+    const auto& constraintIndex = sofa::helper::getReadAccessor(this->d_constraintIndex);
 
-//   for (size_t i = 0; i < newTargets.size() && i < currentDistances.size();
-//        i++) {
-//     Real currentDistance = currentDistances[i];
-//     Real difference = newTargets[i] - currentDistance;
+    using Quad = typename BaseMeshTopology::Quad;
+    using Triangle = typename BaseMeshTopology::Triangle;
+    
+    ReadAccessor<sofa::Data<sofa::type::vector<Quad>>>     quadList = this->d_quads;
+    ReadAccessor<sofa::Data<sofa::type::vector<Triangle>>> triList  = this->d_triangles;
 
-//     // Limit the shift to prevent large jumps
-//     if (std::abs(difference) > maxShift) {
-//       if (difference > 0)
-//         newTargets[i] = currentDistance + maxShift;
-//       else
-//         newTargets[i] = currentDistance - maxShift;
-//     }
-//   }
+    using MatrixDerivRowIterator = typename MatrixDeriv::RowIterator;
+    using Deriv = typename DataTypes::Deriv;
+    using VecCoord = typename DataTypes::VecCoord;
+    using Real = typename DataTypes::Real;
 
-//   d_intermediateTargetDistance.setValue(newTargets);
-//   sofa::helper::AdvancedTimer::stepEnd(
-//       "SurfacePressureEffector::updateTargetDistance");
-// }
+    MatrixDeriv& matrix = *cMatrix.beginEdit();
+    matrix.begin();
+    MatrixDerivRowIterator rowIterator = matrix.writeLine(constraintIndex);
 
-// template <class DataTypes>
-// sofa::type::vector<typename DataTypes::Real>
-// SurfacePressureEffector<DataTypes>::getTargetDistance() {
-//   return d_intermediateTargetDistance.getValue();
-// }
+    cIndex++;
+
+    Real weight = d_weight.getValue();
+
+    VecCoord positions = x.getValue();
+    for (const Quad& quad :  quadList)
+    {
+        Deriv triangle1Normal = cross(positions[quad[1]] - positions[quad[0]], positions[quad[3]] - positions[quad[0]])/2.0;
+        Deriv triangle2Normal = cross(positions[quad[3]] - positions[quad[2]], positions[quad[1]] - positions[quad[2]])/2.0;
+        Deriv quadNormal      = triangle1Normal + triangle2Normal;
+        if(this->d_flipNormal.getValue())
+            quadNormal = -quadNormal;
+
+        quadNormal *= weight; // Apply weight
+
+        for (unsigned i=0; i<4; i++)
+        {
+            rowIterator.addCol(quad[i], quadNormal*(1.0/4.0));
+        }
+    }
+
+    for (const Triangle& triangle : triList)
+    {
+        Deriv triangleNormal = cross(positions[triangle[1]]- positions[triangle[0]], positions[triangle[2]] -positions[triangle[0]])/2.0;
+        if(this->d_flipNormal.getValue())
+            triangleNormal = -triangleNormal;
+        
+        triangleNormal *= weight; // Apply weight
+
+        for (unsigned i=0; i<3; i++)
+        {
+            rowIterator.addCol(triangle[i], triangleNormal*(1.0/3.0));
+        }
+    }
+
+    cMatrix.endEdit();
+    this->m_nbLines = cIndex - constraintIndex;
+}
 
 } // namespace softrobotsinverse::constraint

@@ -27,6 +27,7 @@ public:
   typedef typename DataTypes::VecDeriv VecDeriv;
   typedef typename DataTypes::Coord Coord;
   typedef typename DataTypes::Deriv Deriv;
+  typedef typename DataTypes::MatrixDeriv MatrixDeriv;
   typedef typename sofa::core::behavior::MechanicalState<DataTypes> MechanicalState;
 
   SurfacePressureEffector(MechanicalState *object = nullptr);
@@ -40,16 +41,19 @@ public:
                               sofa::linearalgebra::BaseVector *resV,
                               const sofa::linearalgebra::BaseVector *Jdx) override;
 
+  void buildConstraintMatrix(const ConstraintParams* cParams,
+                             sofa::Data<MatrixDeriv> &cMatrix,
+                             unsigned int &cIndex,
+                             const sofa::Data<sofa::type::vector<typename DataTypes::Coord>> &x) override;
+
   // void getConstraintResolution(std::vector<ConstraintResolution*>& resTab,
   //                              unsigned int& offset) override;
 
-  // Target management for Effector behavior
-  sofa::type::vector<Real> getTargetDistance();
 
 protected:
   sofa::Data<Real> d_targetPressure;
   sofa::Data<Real> d_initPressure;
-  // sofa::Data<sofa::type::vector<Real>> d_intermediateTargetPressure;
+  sofa::Data<Real> d_weight;
 
 private:
   // void updateTargetPressure();
@@ -77,6 +81,12 @@ private:
   using softrobots::constraint::SurfacePressureModel<DataTypes>::d_volumeGrowth ;
   using softrobots::constraint::SurfacePressureModel<DataTypes>::d_eqVolumeGrowth ;
   using softrobots::constraint::SurfacePressureModel<DataTypes>::d_maxVolumeGrowthVariation ;
+  using softrobots::constraint::SurfacePressureModel<DataTypes>::d_triangles ;
+  using softrobots::constraint::SurfacePressureModel<DataTypes>::d_quads ;
+  using softrobots::constraint::SurfacePressureModel<DataTypes>::d_flipNormal ;
+  using softrobots::constraint::SurfacePressureModel<DataTypes>::d_constraintIndex ;
+  using softrobots::constraint::SurfacePressureModel<DataTypes>::d_componentState ;
+  using softrobots::constraint::SurfacePressureModel<DataTypes>::m_nbLines ;
 };
 
 #if !defined(SOFTROBOTS_INVERSE_SURFACEPRESSUREEFFECTOR_CPP)
