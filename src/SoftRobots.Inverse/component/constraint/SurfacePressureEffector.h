@@ -46,6 +46,7 @@ public:
                              unsigned int &cIndex,
                              const sofa::Data<sofa::type::vector<typename DataTypes::Coord>> &x) override;
 
+  // virtual void storeResults(sofa::type::vector<double> &delta) override;
   // void getConstraintResolution(std::vector<ConstraintResolution*>& resTab,
   //                              unsigned int& offset) override;
 
@@ -61,6 +62,8 @@ private:
   
   sofa::Data<Real> m_targetVolume;
   // sofa::Data<Real> m_initPressure;
+
+  sofa::Data<Real> m_currentPressure;
   
   ////////////////////////// Inherited from Effector ////////////////////////////
   using Effector<DataTypes>::d_limitShiftToTarget;
