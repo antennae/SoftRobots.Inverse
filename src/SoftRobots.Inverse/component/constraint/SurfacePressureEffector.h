@@ -12,6 +12,7 @@ using sofa::core::ConstraintParams;
 using sofa::core::VecCoordId;
 using sofa::core::behavior::ConstraintResolution;
 using sofa::helper::ReadAccessor;
+using sofa::linearalgebra::BaseVector ;
 using softrobotsinverse::behavior::Effector;
 
 template <class DataTypes>
@@ -49,21 +50,25 @@ public:
   // virtual void storeResults(sofa::type::vector<double> &delta) override;
   // void getConstraintResolution(std::vector<ConstraintResolution*>& resTab,
   //                              unsigned int& offset) override;
-
+  void storeLambda(const ConstraintParams* cParams,
+                            sofa::core::MultiVecDerivId res,
+                            const BaseVector* lambda) override;
 
 protected:
   sofa::Data<Real> d_targetPressure;
   sofa::Data<Real> d_initPressure;
   sofa::Data<Real> d_weight;
+  sofa::Data<Real> d_currentPressure;
+  sofa::Data<Real> d_targetVolume;
 
 private:
   // void updateTargetPressure();
   // void computeCurrentPressure();
   
-  sofa::Data<Real> m_targetVolume;
+  
   // sofa::Data<Real> m_initPressure;
 
-  sofa::Data<Real> m_currentPressure;
+
   
   ////////////////////////// Inherited from Effector ////////////////////////////
   using Effector<DataTypes>::d_limitShiftToTarget;
