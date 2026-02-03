@@ -55,6 +55,8 @@ set(HEADER_FILES
     ${SRC_DIR}/component/constraint/SlidingActuator.inl
     ${SRC_DIR}/component/constraint/SurfacePressureActuator.h
     ${SRC_DIR}/component/constraint/SurfacePressureActuator.inl
+    ${SRC_DIR}/component/constraint/SlidingForceActuator.h
+    ${SRC_DIR}/component/constraint/SlidingForceActuator.inl
 
     # SENSOR
     ${SRC_DIR}/component/behavior/Sensor.h
@@ -114,6 +116,7 @@ set(SOURCE_FILES
     ${SRC_DIR}/component/constraint/JointActuator.cpp
     ${SRC_DIR}/component/constraint/SlidingActuator.cpp
     ${SRC_DIR}/component/constraint/SurfacePressureActuator.cpp
+    ${SRC_DIR}/component/constraint/SlidingForceActuator.cpp
 
     # SENSOR
     ${SRC_DIR}/component/behavior/Sensor.cpp
