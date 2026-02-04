@@ -249,13 +249,15 @@ void QPInverseProblemImpl::buildQPMatrices()
                 if (mod5 >= 3) { // 3 or 4 -> du or dv
                     if (sfa->hasEpsilonSliding()) {
                         // currentEpsilon = sfa->getEpsilonSliding();
+                        currentEpsilon = 0.0; // No energy on sliding
                         currentRidge = sfa->getEpsilonSliding(); // Use ridge for sliding regularization
                     }
                 }
                 else{
                     if (sfa->hasEpsilon()) {
                         // currentEpsilon = sfa->getEpsilon();
-                        currentRidge = sfa->getEpsilon();
+                        // currentRidge = sfa->getEpsilon();
+                        currentRidge = 1e-12;
                     }
                 }
             }
@@ -264,16 +266,22 @@ void QPInverseProblemImpl::buildQPMatrices()
             if(actuatorsNbLines == ac->getNbLines())
             {
                 actuatorsNbLines = 0;
-                actuatorsId++;
             }
             for(unsigned int j=0; j<dim; j++)
             {
                 // if(ac->hasEpsilon() && j==k) // energy of a specific actuator
                 //     m_qpSystem->Q[k][j] += ac->getEpsilon()*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                if (j==k)
+                if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)){
                     m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                else
-                    m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                } 
+                else{
+                    if (j==k)
+                        m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                    else
+                        m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                }
+
+
             }
             // Add Sparsity (L1 Regularization) to the linear term
             if (currentSparsity > 0.0) {
@@ -311,13 +319,8 @@ void QPInverseProblemImpl::buildQPMatrices()
                 m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
         }
 
-        // Add Ridge Regularization (Identity) on diagonal to ensure positive definiteness
-        // and improve numerical stability for uncoupled variables.
-        // m_qpSystem->Q[k][k] += 1e-10;
-        // double ridgeReg = currentEpsilon * weight * 1e-4 + 1e-12;
-        // std::cout << "Ridge regularization for variable " << k << ": " << ridgeReg << std::endl;
-        // m_qpSystem->Q[k][k] += ridgeReg;    
-
+        // Add a global numerical floor for stability
+        // m_qpSystem->Q[k][k] += 1e-12;
     }
 
 }
