@@ -95,10 +95,23 @@ void SlidingForceActuator<DataTypes>::initData()
     {
         m_hasLambdaInit = true;
         Real f0 = d_initForce.getValue();
-        for(unsigned int i=0; i<nbPoints; i++) {
-            m_lambdaInit[i*5 + 0] = f0;
-            m_lambdaInit[i*5 + 1] = f0;
-            m_lambdaInit[i*5 + 2] = f0;
+        const auto& triangles = (d_topology.get()) ? d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
+        ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+        for (unsigned int i=0; i<nbPoints; i++) {
+            unsigned int triIdx = m_activeTriangles[i];
+            if(triIdx >= triangles.size()) continue;
+            const Triangle& tri = triangles[triIdx];
+            const Coord& A = pos[tri[0]];
+            const Coord& B = pos[tri[1]];
+            const Coord& C = pos[tri[2]];
+            sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
+            n.normalize();
+
+            m_lambdaInit[i*5 + 0] = n[0] * f0; 
+            m_lambdaInit[i*5 + 1] = n[1] * f0;
+            m_lambdaInit[i*5 + 2] = n[2] * f0; 
+            m_lambdaInit[i*5 + 3] = 0.0;
+            m_lambdaInit[i*5 + 4] = 0.0; 
         }
     }
 
@@ -278,41 +291,17 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // Effect of changing u, v on the nodal forces.
         // Use SCALED Gradient to keep Matrix Condition Number low.
 
-        const Real virtualStiffness = d_virtualStiffness.getValue();
-        
         // Row 3: Sliding U (dU)
         MatrixDerivRowIterator rowSlideU = matrix.writeLine(cIndex++);
         rowSlideU.addCol(tri[0], -scaledGradient);
         rowSlideU.addCol(tri[1],  scaledGradient);
         rowSlideU.addCol(tri[2],  Deriv(0,0,0));
-        // 2. The Virtual Spring (Effect of geometry/position)
-        // rowSlideU.addCol(tri[0], Deriv(-virtualStiffness, 0, 0)); 
-        // rowSlideU.addCol(tri[1], Deriv( virtualStiffness, 0, 0));
-        // This links dU directly to the relative positions of A and B
-        Coord vU = pos[tri[1]] - pos[tri[0]];      
-        Real lenU = vU.norm();
-        if (lenU < 1e-9) 
-            lenU = 1e-9;
-        Deriv dirU = vU / lenU;
-        rowSlideU.addCol(tri[0], Deriv(-dirU*virtualStiffness)); 
-        rowSlideU.addCol(tri[1], Deriv( dirU*virtualStiffness));
         
         // Row 4: Sliding V (dV)
         MatrixDerivRowIterator rowSlideV = matrix.writeLine(cIndex++);
         rowSlideV.addCol(tri[0], -scaledGradient);
         rowSlideV.addCol(tri[1],  Deriv(0,0,0));
         rowSlideV.addCol(tri[2],  scaledGradient);
-
-        // rowSlideV.addCol(tri[0], Deriv(0, -virtualStiffness, 0));
-        // rowSlideV.addCol(tri[2], Deriv(0,  virtualStiffness, 0));
-        // 2. The Virtual Spring
-        Coord vV = pos[tri[2]] - pos[tri[0]];      
-        Real lenV = vV.norm();
-        if (lenV < 1e-9) 
-            lenV = 1e-9;
-        Deriv dirV = vV / lenV;
-        rowSlideV.addCol(tri[0], Deriv(-dirV*virtualStiffness));
-        rowSlideV.addCol(tri[2], Deriv( dirV*virtualStiffness));
     }
     
     cMatrix.endEdit();
@@ -426,8 +415,6 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         Real dU = lambda[ i*5 + 3];
         Real dV = lambda[ i*5 + 4];
 
-        // std::cout << "startID: " << startId << " i: " << i << std::endl;
-
         unsigned int triangleIdx = m_activeTriangles[i];
         const Triangle& tri_test = triangles[triangleIdx];
         std::cout <<"Triangle " << m_activeTriangles[i] <<
@@ -459,7 +446,6 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         if (jacobianScale < 1e-9) jacobianScale = 1.0;
         
         // DECODING: Recover physical step
-        // Since we scaled the Jacobian by (1/scale), the lambda returned is (scale * step).
         dU /= jacobianScale;
         dV /= jacobianScale;
 
