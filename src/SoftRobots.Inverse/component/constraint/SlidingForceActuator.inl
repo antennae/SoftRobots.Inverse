@@ -22,6 +22,7 @@ SlidingForceActuator<DataTypes>::SlidingForceActuator(MechanicalState* object)
     , d_minForce(initData(&d_minForce, "minForce", "Min normal force"))
     , d_initForce(initData(&d_initForce, Real(0.0), "initForce", "Initial force guess"))
     , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Trust region for sliding (barycentric step limit)"))
+    , d_virtualStiffness(initData(&d_virtualStiffness, Real(1e-3), "virtualStiffness", "Stiffness of the virtual spring to stabilize sliding when force is zero."))
     , d_epsilon(initData(&d_epsilon, Real(1e-3), "epsilon",
                            "Use this value to prioritize the constraint. 0 means no limitation on the energy transfered by this actuator. Default is 1e-3."))
     , d_epsilonSliding(initData(&d_epsilonSliding, Real(1e-3), "epsilonSliding",
@@ -193,6 +194,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
     }
 }
 
+
 template<class DataTypes>
 void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintParams* cParams,
                                                           DataMatrixDeriv &cMatrix,
@@ -276,7 +278,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // Effect of changing u, v on the nodal forces.
         // Use SCALED Gradient to keep Matrix Condition Number low.
 
-        const Real virtualStiffness = 1e-4;
+        const Real virtualStiffness = d_virtualStiffness.getValue();
         
         // Row 3: Sliding U (dU)
         MatrixDerivRowIterator rowSlideU = matrix.writeLine(cIndex++);
@@ -284,9 +286,16 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         rowSlideU.addCol(tri[1],  scaledGradient);
         rowSlideU.addCol(tri[2],  Deriv(0,0,0));
         // 2. The Virtual Spring (Effect of geometry/position)
+        // rowSlideU.addCol(tri[0], Deriv(-virtualStiffness, 0, 0)); 
+        // rowSlideU.addCol(tri[1], Deriv( virtualStiffness, 0, 0));
         // This links dU directly to the relative positions of A and B
-        rowSlideU.addCol(tri[0], Deriv(-virtualStiffness, 0, 0)); 
-        rowSlideU.addCol(tri[1], Deriv( virtualStiffness, 0, 0));
+        Coord vU = pos[tri[1]] - pos[tri[0]];      
+        Real lenU = vU.norm();
+        if (lenU < 1e-9) 
+            lenU = 1e-9;
+        Deriv dirU = vU / lenU;
+        rowSlideU.addCol(tri[0], Deriv(-dirU*virtualStiffness)); 
+        rowSlideU.addCol(tri[1], Deriv( dirU*virtualStiffness));
         
         // Row 4: Sliding V (dV)
         MatrixDerivRowIterator rowSlideV = matrix.writeLine(cIndex++);
@@ -294,9 +303,16 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         rowSlideV.addCol(tri[1],  Deriv(0,0,0));
         rowSlideV.addCol(tri[2],  scaledGradient);
 
+        // rowSlideV.addCol(tri[0], Deriv(0, -virtualStiffness, 0));
+        // rowSlideV.addCol(tri[2], Deriv(0,  virtualStiffness, 0));
         // 2. The Virtual Spring
-        rowSlideV.addCol(tri[0], Deriv(0, -virtualStiffness, 0)); 
-        rowSlideV.addCol(tri[2], Deriv(0,  virtualStiffness, 0));
+        Coord vV = pos[tri[2]] - pos[tri[0]];      
+        Real lenV = vV.norm();
+        if (lenV < 1e-9) 
+            lenV = 1e-9;
+        Deriv dirV = vV / lenV;
+        rowSlideV.addCol(tri[0], Deriv(-dirV*virtualStiffness));
+        rowSlideV.addCol(tri[2], Deriv( dirV*virtualStiffness));
     }
     
     cMatrix.endEdit();

@@ -82,6 +82,7 @@ protected:
     sofa::Data<Real>                             d_initForce;
     
     sofa::Data<Real>                             d_maxStepSize; // Trust region for u,v updates (e.g. 0.1)
+    sofa::Data<Real>                             d_virtualStiffness; // spring to stabilize when force is zero
     sofa::Data<Real>                             d_epsilon; // regularization
     sofa::Data<Real>                             d_epsilonSliding; // regularization for sliding
 

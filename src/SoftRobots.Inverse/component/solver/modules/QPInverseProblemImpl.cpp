@@ -156,6 +156,8 @@ void QPInverseProblemImpl:: computeEnergyWeight(double& weight)
 
     if(normW > 1e-14)
         weight = normQ/normW;
+    
+    // if (weight < 1e-6) weight = 1e-6; // Ensure regularization even without effectors
 }
 
 
@@ -222,7 +224,8 @@ void QPInverseProblemImpl::buildQPMatrices()
     for (unsigned int k=0; k<dim; k++)
     {
         double currentEpsilon = m_epsilon;
-        double currentSparsity = 0.01;
+        double currentSparsity = 0.0;
+        double currentRidge = 0.0;
 
         if(k<nbActuators) // actuators
         {
@@ -231,8 +234,6 @@ void QPInverseProblemImpl::buildQPMatrices()
             if(ac->hasEpsilon()) currentEpsilon = ac->getEpsilon();
 
             // Check for sparsity parameter (L1 regularization) for ForceLocalizationActuator
-            double currentSparsity = 0.0; 
-            double currentRidge = 0.0;
             if (auto fla = dynamic_cast<ForceLocalizationActuator<Vec3Types>*>(ac)) {
                 currentSparsity = fla->getSparsity();
                 currentRidge = fla->getRidge();
@@ -242,27 +243,19 @@ void QPInverseProblemImpl::buildQPMatrices()
             }
             
             // Check for SlidingForceActuator to separate force and sliding regularization
-            // Each point has 5 lines: Fx, Fy, Fz, du, dv. 
-            // We want to use a different epsilon for du, dv (lines 3 and 4).
-            // actuatorsNbLines is 0-based index of the line BEFORE this iteration?
-            // No, look below: actuatorsNbLines++.
-            // So here, before increment, it is the index of the CURRENT line (0-based).
-            // Wait, let's verify loop logic.
-            /*
-            actuatorsNbLines++;
-            if(actuatorsNbLines == ac->getNbLines()) ...
-            */
-            // Since this block is AFTER the code I am inserting, `actuatorsNbLines` holds the current line index (0-based) 
-            // corresponding to `k`.
-            
             if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)) {
                 unsigned int lineIdx = actuatorsNbLines; // 0-based index
                 unsigned int mod5 = lineIdx % 5;
                 if (mod5 >= 3) { // 3 or 4 -> du or dv
                     if (sfa->hasEpsilonSliding()) {
-                        currentEpsilon = sfa->getEpsilonSliding();
-                        // currentRidge = sfa->getEpsilonSliding();
-                        // currentRidge = currentEpsilon * weight; // small ridge for stability
+                        // currentEpsilon = sfa->getEpsilonSliding();
+                        currentRidge = sfa->getEpsilonSliding(); // Use ridge for sliding regularization
+                    }
+                }
+                else{
+                    if (sfa->hasEpsilon()) {
+                        // currentEpsilon = sfa->getEpsilon();
+                        currentRidge = sfa->getEpsilon();
                     }
                 }
             }
@@ -319,16 +312,12 @@ void QPInverseProblemImpl::buildQPMatrices()
         }
 
         // Add Ridge Regularization (Identity) on diagonal to ensure positive definiteness
-        // and improve localization for uncoupled variables.
-        // Scale by weight^2 to match Q units.
-        // double ridgeReg = currentEpsilon * weight * weight;
-        // if (ridgeReg < 1e-12) ridgeReg = 1e-12;
-        // m_qpSystem->Q[k][k] += ridgeReg;
+        // and improve numerical stability for uncoupled variables.
+        // m_qpSystem->Q[k][k] += 1e-10;
+        // double ridgeReg = currentEpsilon * weight * 1e-4 + 1e-12;
+        // std::cout << "Ridge regularization for variable " << k << ": " << ridgeReg << std::endl;
+        // m_qpSystem->Q[k][k] += ridgeReg;    
 
-        // Add Sparsity (L1 Regularization) to the linear term
-        // if (currentSparsity > 0.0) {
-        //     m_qpSystem->c[k] += currentSparsity * weight;
-        // }
     }
 
 }
@@ -351,6 +340,7 @@ void QPInverseProblemImpl::solve(double& objective, int& iterations)
     m_qpCParams->allowSliding = m_allowSliding;
 
     vector<double> result; // size of dim
+    result.assign(m_qpSystem->dim, 0.0);
     vector<double> dual; // size of nb constraints
 
     objective  = 0;
