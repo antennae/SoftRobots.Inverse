@@ -21,11 +21,13 @@ SlidingForceActuator<DataTypes>::SlidingForceActuator(MechanicalState* object)
     , d_maxForce(initData(&d_maxForce, "maxForce", "Max normal force"))
     , d_minForce(initData(&d_minForce, "minForce", "Min normal force"))
     , d_initForce(initData(&d_initForce, Real(0.0), "initForce", "Initial force guess"))
-    , d_currentForces(initData(&d_currentForces, "currentForces", "Current forces applied"))
     , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Trust region for sliding (barycentric step limit)"))
-    , d_showForce(initData(&d_showForce, false, "showForce", "Visualize forces"))
     , d_epsilon(initData(&d_epsilon, Real(1e-3), "epsilon",
                            "Use this value to prioritize the constraint. 0 means no limitation on the energy transfered by this actuator. Default is 1e-3."))
+    , d_epsilonSliding(initData(&d_epsilonSliding, Real(1e-3), "epsilonSliding",
+                           "Use this value to prioritize the sliding constraint. Default is 1e-3."))
+    , d_currentForces(initData(&d_currentForces, "currentForces", "Current forces applied"))
+    , d_showForce(initData(&d_showForce, false, "showForce", "Visualize forces"))
     , d_visuScale(initData(&d_visuScale, Real(0.1), "visuScale", "Scale for visualization"))
     , d_topology(initLink("topology", "Mesh topology"))
 {
@@ -166,27 +168,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
                  if (d_initForce.isSet() && d_initForce.getValue() > 1e-9) fScale = d_initForce.getValue();
                  currentForce = n * fScale;
              }
-        }
-        // Compute Scaling Factor (Must match buildConstraintMatrix logic)
-                                             
-                                                                                                                
-        // if (currentForce.norm2() < 1e-12 && m_state && d_topology.get()) {                                        
-        //     // Virtual Force Logic                        
-        //     ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();                                                       
-        //     unsigned int triIdx = m_activeTriangles[i];                                                          
-        //     if(triIdx < triangles.size()) {                                                                      
-        //         const Triangle& t = triangles[triIdx];                                                           
-        //         const Coord& A = pos[t[0]];                                                                      
-        //         const Coord& B = pos[t[1]];                                                                      
-        //         const Coord& C = pos[t[2]];                                                                      
-        //         sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);                                                
-        //         n.normalize();                                                                                   
-        //         Real fScale = 1.0;                                                                               
-        //         if (d_initForce.isSet() && d_initForce.getValue() > 1e-9) fScale = d_initForce.getValue();       
-        //         currentForce = n * fScale;                                                                       
-        //     }                                                                                                    
-        // }                                                                                                         
-                                                                                                                
+        }                                                                                                                
         Real jacobianScale = currentForce.norm();                                                                 
         if (jacobianScale < 1e-9) jacobianScale = 1.0;   
 
@@ -455,13 +437,19 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
             continue; 
         }
 
-        // Safety check 2: Detect Garbage
+        // Safety check 2: Detect Garbage and Clamp
         // We check the physical step against the limit
-        // if (std::abs(dU) > maxStep * 5.0 || std::abs(dV) > maxStep * 5.0) {
-            // msg_warning() << "SlidingForceActuator: Solver returned step size " << dU << ", " << dV 
-            //             << " exceeding limit " << maxStep << ". Skipping update.";
-            // continue;
-        // }
+        if (std::abs(dU) > maxStep || std::abs(dV) > maxStep) {
+             if (std::abs(dU) > maxStep * 2.0 || std::abs(dV) > maxStep * 2.0) {
+                 msg_warning() << "SlidingForceActuator: Solver returned step size " << dU << ", " << dV 
+                               << " exceeding limit " << maxStep << ". Clamping.";
+             }
+             if (dU > maxStep) dU = maxStep;
+             else if (dU < -maxStep) dU = -maxStep;
+             
+             if (dV > maxStep) dV = maxStep;
+             else if (dV < -maxStep) dV = -maxStep;
+        }
 
         currentForces[i] = sofa::type::Vec3(Fx, Fy, Fz);
         

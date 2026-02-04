@@ -83,6 +83,7 @@ protected:
     
     sofa::Data<Real>                             d_maxStepSize; // Trust region for u,v updates (e.g. 0.1)
     sofa::Data<Real>                             d_epsilon; // regularization
+    sofa::Data<Real>                             d_epsilonSliding; // regularization for sliding
 
     // Internal State
     sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_currentForces; // Force from previous step (needed for gradients)
@@ -115,6 +116,10 @@ protected:
     void initData();
     void updateLimit();
     void projectToMesh(unsigned int& triIdx, sofa::type::Vec3& bary);
+
+public:
+    Real getEpsilonSliding() const { return d_epsilonSliding.getValue(); }
+    bool hasEpsilonSliding() const { return d_epsilonSliding.isSet(); }
 
 };
 

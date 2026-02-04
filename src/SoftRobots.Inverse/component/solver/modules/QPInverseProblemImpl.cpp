@@ -33,6 +33,7 @@
 #include <SoftRobots.Inverse/component/solver/modules/QPInverseProblemImpl.h>
 #include <SoftRobots.Inverse/component/solver/modules/NLCPSolver.h>
 #include <SoftRobots.Inverse/component/constraint/ForceLocalizationActuator.h> // Added to access getSparsity()
+#include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h> // Added
 
 #include <sofa/helper/AdvancedTimer.h>
 #include <sofa/component/collision/response/contact/CollisionResponse.h>
@@ -44,6 +45,7 @@ namespace softrobotsinverse::solver::module
 
 using softrobots::behavior::SoftRobotsBaseConstraint;
 using softrobotsinverse::constraint::ForceLocalizationActuator; // Added
+using softrobotsinverse::constraint::SlidingForceActuator; // Added
 using sofa::defaulttype::Vec3Types; // Added
 using sofa::defaulttype::Rigid3Types; // Added
 
@@ -238,6 +240,31 @@ void QPInverseProblemImpl::buildQPMatrices()
                 currentSparsity = fla->getSparsity();
                 currentRidge = fla->getRidge();
             }
+            
+            // Check for SlidingForceActuator to separate force and sliding regularization
+            // Each point has 5 lines: Fx, Fy, Fz, du, dv. 
+            // We want to use a different epsilon for du, dv (lines 3 and 4).
+            // actuatorsNbLines is 0-based index of the line BEFORE this iteration?
+            // No, look below: actuatorsNbLines++.
+            // So here, before increment, it is the index of the CURRENT line (0-based).
+            // Wait, let's verify loop logic.
+            /*
+            actuatorsNbLines++;
+            if(actuatorsNbLines == ac->getNbLines()) ...
+            */
+            // Since this block is AFTER the code I am inserting, `actuatorsNbLines` holds the current line index (0-based) 
+            // corresponding to `k`.
+            
+            if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)) {
+                unsigned int lineIdx = actuatorsNbLines; // 0-based index
+                unsigned int mod5 = lineIdx % 5;
+                if (mod5 >= 3) { // 3 or 4 -> du or dv
+                    if (sfa->hasEpsilonSliding()) {
+                        currentEpsilon = sfa->getEpsilonSliding();
+                        // currentRidge = sfa->getEpsilonSliding();
+                    }
+                }
+            }
 
             actuatorsNbLines++;
             if(actuatorsNbLines == ac->getNbLines())
@@ -247,8 +274,10 @@ void QPInverseProblemImpl::buildQPMatrices()
             }
             for(unsigned int j=0; j<dim; j++)
             {
-                if(ac->hasEpsilon() && j==k) // energy of a specific actuator
-                    m_qpSystem->Q[k][j] += ac->getEpsilon()*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                // if(ac->hasEpsilon() && j==k) // energy of a specific actuator
+                //     m_qpSystem->Q[k][j] += ac->getEpsilon()*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                if (j==k)
+                    m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
                 else
                     m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
             }
