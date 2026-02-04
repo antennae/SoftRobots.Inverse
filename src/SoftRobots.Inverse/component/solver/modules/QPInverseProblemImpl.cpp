@@ -262,6 +262,7 @@ void QPInverseProblemImpl::buildQPMatrices()
                     if (sfa->hasEpsilonSliding()) {
                         currentEpsilon = sfa->getEpsilonSliding();
                         // currentRidge = sfa->getEpsilonSliding();
+                        // currentRidge = currentEpsilon * weight; // small ridge for stability
                     }
                 }
             }

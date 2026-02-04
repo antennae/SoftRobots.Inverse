@@ -275,18 +275,28 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // --- Rows 3, 4: Sliding (dU, dV) ---
         // Effect of changing u, v on the nodal forces.
         // Use SCALED Gradient to keep Matrix Condition Number low.
+
+        const Real virtualStiffness = 1e-4;
         
         // Row 3: Sliding U (dU)
         MatrixDerivRowIterator rowSlideU = matrix.writeLine(cIndex++);
         rowSlideU.addCol(tri[0], -scaledGradient);
         rowSlideU.addCol(tri[1],  scaledGradient);
         rowSlideU.addCol(tri[2],  Deriv(0,0,0));
+        // 2. The Virtual Spring (Effect of geometry/position)
+        // This links dU directly to the relative positions of A and B
+        rowSlideU.addCol(tri[0], Deriv(-virtualStiffness, 0, 0)); 
+        rowSlideU.addCol(tri[1], Deriv( virtualStiffness, 0, 0));
         
         // Row 4: Sliding V (dV)
         MatrixDerivRowIterator rowSlideV = matrix.writeLine(cIndex++);
         rowSlideV.addCol(tri[0], -scaledGradient);
         rowSlideV.addCol(tri[1],  Deriv(0,0,0));
         rowSlideV.addCol(tri[2],  scaledGradient);
+
+        // 2. The Virtual Spring
+        rowSlideV.addCol(tri[0], Deriv(0, -virtualStiffness, 0)); 
+        rowSlideV.addCol(tri[2], Deriv(0,  virtualStiffness, 0));
     }
     
     cMatrix.endEdit();
@@ -303,9 +313,9 @@ void SlidingForceActuator<DataTypes>::getConstraintViolation(const ConstraintPar
     // Target is zero (minimization of variables)
     // No violation
     unsigned int dim = m_activeTriangles.size() * 5;
-    unsigned int startId = d_constraintIndex.getValue();
+    const auto& constraintId = sofa::helper::getReadAccessor(d_constraintIndex);
     for(unsigned int i=0; i<dim; i++)
-        resV->set(startId + i, 0.);
+        resV->set(constraintId + i, 0.);
 }
 
 template<class DataTypes>
