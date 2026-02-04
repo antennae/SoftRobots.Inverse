@@ -412,8 +412,15 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
 
         // std::cout << "startID: " << startId << " i: " << i << std::endl;
 
-        std::cout <<"Triangle " << m_activeTriangles[i] << " Lambda Force: " << Fx << "," << Fy << "," << Fz 
-                  << " Sliding Step: " << dU << "," << dV << std::endl;
+        unsigned int triangleIdx = m_activeTriangles[i];
+        const Triangle& tri_test = triangles[triangleIdx];
+        std::cout <<"Triangle " << m_activeTriangles[i] <<
+        " Nodes: " << tri_test[0] << ", " << tri_test[1] << "," << tri_test[2]
+        <<"Positions : [" << pos[tri_test[0]][0] << "," << pos[tri_test[0]][1] << "," << pos[tri_test[0]][2] << "] , ["
+                        << pos[tri_test[1]][0] << "," << pos[tri_test[1]][1] << "," << pos[tri_test[1]][2] << "] , ["
+                        << pos[tri_test[2]][0] << "," << pos[tri_test[2]][1] << "," << pos[tri_test[2]][2] << "] "
+                  <<  " Lambda Force: " << Fx << "," << Fy << "," << Fz 
+                  <<  " Sliding Step: " << dU << "," << dV << std::endl;
         
         // Recompute Scaling Factor to decode dU/dV
         sofa::type::Vec3 gradientForce = currentForces[i];
