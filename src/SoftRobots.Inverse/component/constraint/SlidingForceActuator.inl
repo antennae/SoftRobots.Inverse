@@ -517,11 +517,12 @@ void SlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
         Coord P = A + (B-A)*u + (C-A)*v;
         
         sofa::type::Vec3 f = d_currentForces.getValue()[i];
+        sofa::type::Vec3 dir = f/f.norm();
         
         // vparams->drawTool()->drawArrow(P, P + n * f * d_visuScale.getValue(), 0.5 * d_visuScale.getValue());
 
-        vparams->drawTool()->drawArrow(P , P + f * d_visuScale.getValue(), 
-                                        0.5 * d_visuScale.getValue(), 
+        vparams->drawTool()->drawArrow(P - dir * log(f.norm()+1)*d_visuScale.getValue(), P, 
+                                        log(f.norm()+1)*d_visuScale.getValue()/20.0, 
                                         sofa::type::RGBAColor::red());
     }
 }
