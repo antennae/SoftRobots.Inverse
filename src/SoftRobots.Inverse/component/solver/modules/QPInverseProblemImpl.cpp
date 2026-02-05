@@ -244,20 +244,20 @@ void QPInverseProblemImpl::buildQPMatrices()
             
             // Check for SlidingForceActuator to separate force and sliding regularization
             if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)) {
+
                 unsigned int lineIdx = actuatorsNbLines; // 0-based index
                 unsigned int mod5 = lineIdx % 5;
                 if (mod5 >= 3) { // 3 or 4 -> du or dv
-                    if (sfa->hasEpsilonSliding()) {
+                    if (sfa->hasEpsilonSliding() && sfa->hasRidgeSliding()) {
                         // currentEpsilon = sfa->getEpsilonSliding();
-                        currentEpsilon = 0.0; // No energy on sliding
-                        currentRidge = sfa->getEpsilonSliding(); // Use ridge for sliding regularization
+                        currentEpsilon = sfa->getEpsilonSliding();
+                        currentRidge = sfa->getRidgeSliding(); // Use ridge for sliding regularization
                     }
                 }
                 else{
-                    if (sfa->hasEpsilon()) {
-                        // currentEpsilon = sfa->getEpsilon();
-                        // currentRidge = sfa->getEpsilon();
-                        currentRidge = 1e-12;
+                    if (sfa->hasEpsilonForce() && sfa->hasRidgeForce()) {
+                        currentEpsilon = sfa->getEpsilonForce();
+                        currentRidge = sfa->getRidgeForce(); // Use ridge for force regularization
                     }
                 }
             }
@@ -271,15 +271,15 @@ void QPInverseProblemImpl::buildQPMatrices()
             {
                 // if(ac->hasEpsilon() && j==k) // energy of a specific actuator
                 //     m_qpSystem->Q[k][j] += ac->getEpsilon()*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)){
+                // if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)){
+                //     m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                // } 
+                // else{
+                if (j==k)
                     m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                } 
-                else{
-                    if (j==k)
-                        m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                    else
-                        m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                }
+                else
+                    m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                // }
 
 
             }
@@ -318,11 +318,7 @@ void QPInverseProblemImpl::buildQPMatrices()
             for(unsigned int j=0; j<dim; j++)
                 m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
         }
-
-        // Add a global numerical floor for stability
-        // m_qpSystem->Q[k][k] += 1e-12;
     }
-
 }
 
 

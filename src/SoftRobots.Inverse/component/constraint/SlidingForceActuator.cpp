@@ -10,7 +10,7 @@ using namespace sofa::defaulttype;
 using namespace sofa::helper;
 using namespace sofa::core;
 
-int SlidingForceActuatorClass = RegisterObject("This component applies a force on a surface and optimizes its location (barycentric coordinates).")
+int SlidingForceActuatorClass = RegisterObject("This component applies a force on a surface and optimizes its location (Cartesian local coordinates).")
 .add< SlidingForceActuator<Vec3Types> >(true)
 ;
 

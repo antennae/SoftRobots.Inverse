@@ -75,21 +75,24 @@ protected:
 
     // Inputs
     sofa::Data<sofa::type::vector<unsigned int>> d_triangleIndices; // Which triangles are active
-    sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_barycentric; // current (u, v, w) for each point. w = 1-u-v.
+    sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_localCoords; // current (U, V, 0) Cartesian in tangent plane for each point.
     
     sofa::Data<Real>                             d_maxForce;
     sofa::Data<Real>                             d_minForce;
     sofa::Data<Real>                             d_initForce;
     
-    sofa::Data<Real>                             d_maxStepSize; // Trust region for u,v updates (e.g. 0.1)
-    sofa::Data<Real>                             d_virtualStiffness; // spring to stabilize when force is zero
-    sofa::Data<Real>                             d_epsilon; // regularization
+    sofa::Data<Real>                             d_maxStepSize; // Trust region for sliding (Cartesian step limit)
+    sofa::Data<Real>                             d_epsilonForce; // regularization
     sofa::Data<Real>                             d_epsilonSliding; // regularization for sliding
+    sofa::Data<Real>                             d_ridgeForce; // Ridge for force variable
+    sofa::Data<Real>                             d_ridgeSliding; // Ridge for sliding variable
+    sofa::Data<Real>                             d_epsilon; // Overall regularization (deprecated, use d_epsilonForce and d_epsilonSliding instead)
 
     // Internal State
     sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_currentForces; // Force from previous step (needed for gradients)
+    sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_currentLocation; // Current location in world coordinates
     sofa::type::vector<unsigned int>             m_activeTriangles; // Internal copy
-    sofa::type::vector<sofa::type::Vec3>         m_activeBarycentric; 
+    sofa::type::vector<sofa::type::Vec3>         m_activeLocalCoords; 
 
     // Visualization
     sofa::Data<bool>                             d_showForce;
@@ -116,11 +119,20 @@ protected:
 
     void initData();
     void updateLimit();
-    void projectToMesh(unsigned int& triIdx, sofa::type::Vec3& bary);
+    void projectToMesh(unsigned int& triIdx, sofa::type::Vec3& localCoords);
 
 public:
     Real getEpsilonSliding() const { return d_epsilonSliding.getValue(); }
     bool hasEpsilonSliding() const { return d_epsilonSliding.isSet(); }
+
+    Real getEpsilonForce() const { return d_epsilonForce.getValue(); }
+    bool hasEpsilonForce() const { return d_epsilonForce.isSet(); }
+
+    Real getRidgeForce() const { return d_ridgeForce.getValue(); }
+    bool hasRidgeForce() const { return d_ridgeForce.isSet(); }
+
+    Real getRidgeSliding() const { return d_ridgeSliding.getValue(); }
+    bool hasRidgeSliding() const { return d_ridgeSliding.isSet(); }
 
 };
 
