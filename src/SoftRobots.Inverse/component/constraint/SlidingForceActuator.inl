@@ -452,10 +452,10 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
 {
     SOFA_UNUSED(delta);
 
-    std::cout<<"SlidingForceActuator::storeResults - Lambda: ";
-    for (auto i: lambda)
-        std::cout<<i<<", ";
-    std::cout<<std::endl;
+    // std::cout<<"SlidingForceActuator::storeResults - Lambda: ";
+    // for (auto i: lambda)
+    //     std::cout<<i<<", ";
+    // std::cout<<std::endl;
 
     unsigned int n_triangles = m_activeTriangles.size();
     // unsigned int startId = d_constraintIndex.getValue();
@@ -578,7 +578,7 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         d_currentLocation.setValue(currentLocations);
     }
 
-    std::cout << "Current Location "<<d_currentLocation.getValue()[0] << std::endl;
+    // std::cout << "Current Location "<<d_currentLocation.getValue()[0] << std::endl;
     
     updateLimit(); // Important for bounds!
     
