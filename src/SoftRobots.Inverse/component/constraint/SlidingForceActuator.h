@@ -80,8 +80,10 @@ protected:
     sofa::Data<Real>                             d_maxForce;
     sofa::Data<Real>                             d_minForce;
     sofa::Data<Real>                             d_initForce;
+    sofa::Data<Real>                             d_maxForceStep; // Max change in force magnitude per iteration (0 = no limit)
     
     sofa::Data<Real>                             d_maxStepSize; // Trust region for sliding (Cartesian step limit)
+    sofa::Data<Real>                             d_stepDamping; // Damping factor for sliding step (0..1)
     sofa::Data<Real>                             d_epsilonForce; // regularization
     sofa::Data<Real>                             d_epsilonSliding; // regularization for sliding
     sofa::Data<Real>                             d_ridgeForce; // Ridge for force variable

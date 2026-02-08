@@ -23,7 +23,9 @@ SlidingForceActuator<DataTypes>::SlidingForceActuator(MechanicalState* object)
     , d_maxForce(initData(&d_maxForce, "maxForce", "Max normal force"))
     , d_minForce(initData(&d_minForce, "minForce", "Min normal force"))
     , d_initForce(initData(&d_initForce, Real(0.0), "initForce", "Initial force guess"))
+    , d_maxForceStep(initData(&d_maxForceStep, Real(0.0), "maxForceStep", "Max change in force magnitude per iteration (0 = no limit)"))
     , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Trust region for sliding (Cartesian step limit in tangent plane)"))
+    , d_stepDamping(initData(&d_stepDamping, Real(0.5), "stepDamping", "Damping factor for sliding step (0.1). Lower reduces jitter."))
     , d_epsilon(initData(&d_epsilon, Real(1e-3), "epsilon", 
                 "Regularization for the constraint. Use this value to prioritize the constraint. 0 means no limitation on the energy transfered by this actuator. Default is 1e-3."))
     , d_epsilonForce(initData(&d_epsilonForce, Real(1e-3), "epsilonForce",
@@ -147,6 +149,12 @@ void SlidingForceActuator<DataTypes>::initData()
 
     if(d_minForce.isSet())
         m_hasLambdaMin = true;
+
+    if (d_maxForceStep.isSet() && d_maxForceStep.getValue() > 0.0)
+    {
+        m_hasLambdaMax = true;
+        m_hasLambdaMin = true;
+    }
     
     // Initialize forces using normal direction and initForce magnitude
     sofa::type::vector<sofa::type::Vec3> currentForces;
@@ -208,6 +216,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
     Real maxF = d_maxForce.isSet() ? d_maxForce.getValue() : 1e20;
     Real minF = d_minForce.isSet() ? d_minForce.getValue() : -1e20;
     Real step = d_maxStepSize.getValue();
+    Real maxForceStep = d_maxForceStep.getValue();
     
     const auto& triangles = (d_topology.get()) ? d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
 
@@ -235,15 +244,27 @@ void SlidingForceActuator<DataTypes>::updateLimit()
         if (jacobianScale < 1e-9) jacobianScale = 1.0;   
 
         // Force bounds (Indices 0, 1, 2)
-        m_lambdaMin[i*5 + 0] = minF;
-        m_lambdaMax[i*5 + 0] = maxF;
-        m_lambdaMin[i*5 + 1] = minF;
-        m_lambdaMax[i*5 + 1] = maxF;
-        m_lambdaMin[i*5 + 2] = minF;
-        m_lambdaMax[i*5 + 2] = maxF;
+        if (maxForceStep > 0.0)
+        {
+            m_lambdaMin[i*5 + 0] = std::max(minF, currentForce[0] - maxForceStep);
+            m_lambdaMax[i*5 + 0] = std::min(maxF, currentForce[0] + maxForceStep);
+            m_lambdaMin[i*5 + 1] = std::max(minF, currentForce[1] - maxForceStep);
+            m_lambdaMax[i*5 + 1] = std::min(maxF, currentForce[1] + maxForceStep);
+            m_lambdaMin[i*5 + 2] = std::max(minF, currentForce[2] - maxForceStep);
+            m_lambdaMax[i*5 + 2] = std::min(maxF, currentForce[2] + maxForceStep);
+        }
+        else
+        {
+            m_lambdaMin[i*5 + 0] = minF;
+            m_lambdaMax[i*5 + 0] = maxF;
+            m_lambdaMin[i*5 + 1] = minF;
+            m_lambdaMax[i*5 + 1] = maxF;
+            m_lambdaMin[i*5 + 2] = minF;
+            m_lambdaMax[i*5 + 2] = maxF;
+        }
         
         // Sliding bounds (Indices 3, 4) - SCALED Bounds for Cartesian dU, dV
-        Real scaledStep = step * jacobianScale;
+        Real scaledStep = step  ; //* jacobianScale;
         
         m_lambdaMin[i*5 + 3] = -scaledStep;
         m_lambdaMax[i*5 + 3] = scaledStep;
@@ -364,6 +385,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
     
     cMatrix.endEdit();
     m_nbLines = cIndex - startConstraintIndex;
+
 }
 
 template<class DataTypes>
@@ -467,6 +489,9 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
     
     sofa::helper::WriteAccessor< sofa::Data<sofa::type::vector<sofa::type::Vec3>> > currentForces = d_currentForces;
     Real maxStep = d_maxStepSize.getValue();
+    Real damping = d_stepDamping.getValue();
+    if (damping < 0.0) damping = 0.0;
+    if (damping > 1.0) damping = 1.0;
     
     for(unsigned int i=0; i<n_triangles; i++) {
         Real Fx = lambda[ i*5 + 0];
@@ -498,8 +523,8 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         if (jacobianScale < 1e-9) jacobianScale = 1.0;
         
         // DECODING: Recover physical step (Cartesian distance in tangent plane)
-        dU /= jacobianScale;
-        dV /= jacobianScale;
+        // dU /= jacobianScale;
+        // dV /= jacobianScale;
 
         // Safety check 1: Detect NaN/Inf
         if (std::isnan(Fx) || std::isnan(Fy) || std::isnan(Fz) || std::isnan(dU) || std::isnan(dV) ||
@@ -507,6 +532,10 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
             msg_warning() << "SlidingForceActuator: Solver returned NaN/Inf! Skipping update for point " << i;
             continue; 
         }
+
+        // Apply damping to reduce jitter
+        dU *= damping;
+        dV *= damping;
 
         // Safety check 2: Detect Garbage and Clamp
         if (std::abs(dU) > maxStep || std::abs(dV) > maxStep) {
