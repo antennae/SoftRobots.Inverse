@@ -275,13 +275,12 @@ void QPInverseProblemImpl::buildQPMatrices()
                 //     m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
                 // } 
                 // else{
-                if (j==k)
-                    m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
-                else
-                    m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                // if (j==k)
+                //     m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
+                // else
+                //     m_qpSystem->Q[k][j] += m_epsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
                 // }
-
-
+                m_qpSystem->Q[k][j] += currentEpsilon*weight*m_qpSystem->W[acIds[k]][acIds[j]];
             }
             // Add Sparsity (L1 Regularization) to the linear term
             if (currentSparsity > 0.0) {
