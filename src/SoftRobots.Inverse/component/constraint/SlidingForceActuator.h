@@ -79,7 +79,7 @@ protected:
     
     sofa::Data<Real>                             d_maxForce;
     sofa::Data<Real>                             d_minForce;
-    sofa::Data<Real>                             d_initForce;
+    sofa::Data<sofa::type::Vec3>                 d_initForce;
     sofa::Data<Real>                             d_maxForceStep; // Max change in force magnitude per iteration (0 = no limit)
     
     sofa::Data<Real>                             d_maxStepSize; // Trust region for sliding (Cartesian step limit)

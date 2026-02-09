@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <iostream>
 
 #include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h>
 #include <sofa/core/visual/VisualParams.h>
@@ -22,7 +23,7 @@ SlidingForceActuator<DataTypes>::SlidingForceActuator(MechanicalState* object)
     , d_localCoords(initData(&d_localCoords, "localCoords", "Local Cartesian coords (U, V, 0) in tangent plane for each point."))
     , d_maxForce(initData(&d_maxForce, "maxForce", "Max normal force"))
     , d_minForce(initData(&d_minForce, "minForce", "Min normal force"))
-    , d_initForce(initData(&d_initForce, Real(0.0), "initForce", "Initial force guess"))
+    , d_initForce(initData(&d_initForce, Vec3(0.0, 0.0, 0.0), "initForce", "Initial force guess"))
     , d_maxForceStep(initData(&d_maxForceStep, Real(0.0), "maxForceStep", "Max change in force magnitude per iteration (0 = no limit)"))
     , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Trust region for sliding (Cartesian step limit in tangent plane)"))
     , d_stepDamping(initData(&d_stepDamping, Real(0.5), "stepDamping", "Damping factor for sliding step (0.1). Lower reduces jitter."))
@@ -123,7 +124,7 @@ void SlidingForceActuator<DataTypes>::initData()
     if(d_initForce.isSet())
     {
         m_hasLambdaInit = true;
-        Real f0 = d_initForce.getValue();
+        sofa::type::Vec3 f0 = d_initForce.getValue();
         const auto& triangles = (d_topology.get()) ? d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
         ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
         for (unsigned int i=0; i<nbPoints; i++) {
@@ -136,9 +137,9 @@ void SlidingForceActuator<DataTypes>::initData()
             sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
             n.normalize();
 
-            m_lambdaInit[i*5 + 0] = n[0] * f0; 
-            m_lambdaInit[i*5 + 1] = n[1] * f0;
-            m_lambdaInit[i*5 + 2] = n[2] * f0; 
+            m_lambdaInit[i*5 + 0] = n[0] * f0[0]; 
+            m_lambdaInit[i*5 + 1] = n[1] * f0[1];
+            m_lambdaInit[i*5 + 2] = n[2] * f0[2]; 
             m_lambdaInit[i*5 + 3] = 0.0;
             m_lambdaInit[i*5 + 4] = 0.0; 
         }
@@ -162,7 +163,8 @@ void SlidingForceActuator<DataTypes>::initData()
     if (d_topology.get() && m_state) {
         const auto& triangles = d_topology.get()->getTriangles();
         ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
-        Real fMag = d_initForce.getValue();
+        sofa::type::Vec3 f0 = d_initForce.getValue();
+        Real fMag = f0.norm();
         if (fMag == 0.0) fMag = 1e-3; // Fallback to avoid singular Jacobian
 
         for(unsigned int i=0; i<nbPoints; i++) {
@@ -236,8 +238,12 @@ void SlidingForceActuator<DataTypes>::updateLimit()
                  sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
                  n.normalize();
                  Real fScale = 1.0;
-                 if (d_initForce.isSet() && d_initForce.getValue() > 1e-9) fScale = d_initForce.getValue();
-                 currentForce = n * fScale;
+                 if (d_initForce.isSet() && d_initForce.getValue().norm () > 1e-9){
+                    currentForce = d_initForce.getValue();
+                 } else {
+                    currentForce = n * fScale;
+                 }
+                 
              }
         }                                                                                                                
         Real jacobianScale = currentForce.norm();                                                                 
@@ -336,7 +342,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // Handle vanishing gradients when force is zero.
         if (gradientForce.norm2() < 1e-12) {
             Real scale = 1.0;
-            if (d_initForce.isSet() && d_initForce.getValue() > 1e-9) scale = d_initForce.getValue();
+            if (d_initForce.isSet() && d_initForce.getValue().norm() > 1e-9) scale = d_initForce.getValue().norm();
             gradientForce = nBasis * scale;
         }
         
@@ -515,7 +521,7 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
             n.normalize();
             
             Real scale = 1.0;
-            if (d_initForce.isSet() && d_initForce.getValue() > 1e-9) scale = d_initForce.getValue();
+            if (d_initForce.isSet() && d_initForce.getValue().norm() > 1e-9) scale = d_initForce.getValue().norm();
             
             gradientForce = n * scale;
         }
