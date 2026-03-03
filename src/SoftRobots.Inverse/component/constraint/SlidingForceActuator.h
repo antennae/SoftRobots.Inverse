@@ -88,6 +88,7 @@ protected:
     sofa::Data<Real>                             d_epsilonSliding; // regularization for sliding
     sofa::Data<Real>                             d_ridgeForce; // Ridge for force variable
     sofa::Data<Real>                             d_ridgeSliding; // Ridge for sliding variable
+    sofa::Data<Real>                             d_jacobianScaleFactor; // Factor to scale constraint Jacobian rows (default 1.0). Use ~3.33 for 30% YM smoothing.
     sofa::Data<Real>                             d_epsilon; // Overall regularization (deprecated, use d_epsilonForce and d_epsilonSliding instead)
 
     // Internal State

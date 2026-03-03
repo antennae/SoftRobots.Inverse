@@ -37,6 +37,7 @@ SlidingForceActuator<DataTypes>::SlidingForceActuator(MechanicalState* object)
                         "Ridge for force variable to improve convergence when the optimal force is close to zero. Default is 1e-12."))
     , d_ridgeSliding(initData(&d_ridgeSliding, Real(1e-12), "ridgeSliding", 
                         "Ridge for sliding variable to improve convergence when the optimal sliding is close to zero. Default is 1e-12."))
+    , d_jacobianScaleFactor(initData(&d_jacobianScaleFactor, Real(1.0), "jacobianScaleFactor", "Factor to scale constraint Jacobian rows for better localization (3.33 matches 30% YM effect)."))
     , d_currentForces(initData(&d_currentForces, "currentForces", "Current forces applied"))
     , d_currentLocation(initData(&d_currentLocation, "currentLocation", "Current force locations in world coordinates"))
     , d_showForce(initData(&d_showForce, false, "showForce", "Visualize forces"))
@@ -351,24 +352,27 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         if (jacobianScale < 1e-9) jacobianScale = 1.0;
         sofa::type::Vec3 scaledGradient = gradientForce / jacobianScale;
 
+
+        // Scaling factor for sliding (Surrogate Jacobian effect)
+        Real factor = d_jacobianScaleFactor.getValue();
         // --- Rows 0, 1, 2: Force Components (Fx, Fy, Fz) ---
         // Row 0: Fx
         MatrixDerivRowIterator rowFx = matrix.writeLine(cIndex++);
-        rowFx.addCol(tri[0], Deriv(weightA, 0, 0));
-        rowFx.addCol(tri[1], Deriv(weightB, 0, 0));
-        rowFx.addCol(tri[2], Deriv(weightC, 0, 0));
+        rowFx.addCol(tri[0], factor * Deriv(weightA, 0, 0));
+        rowFx.addCol(tri[1], factor * Deriv(weightB, 0, 0));
+        rowFx.addCol(tri[2], factor * Deriv(weightC, 0, 0));
         
         // Row 1: Fy
         MatrixDerivRowIterator rowFy = matrix.writeLine(cIndex++);
-        rowFy.addCol(tri[0], Deriv(0, weightA, 0));
-        rowFy.addCol(tri[1], Deriv(0, weightB, 0));
-        rowFy.addCol(tri[2], Deriv(0, weightC, 0));
+        rowFy.addCol(tri[0], factor * Deriv(0, weightA, 0));
+        rowFy.addCol(tri[1], factor * Deriv(0, weightB, 0));
+        rowFy.addCol(tri[2], factor * Deriv(0, weightC, 0));
         
         // Row 2: Fz
         MatrixDerivRowIterator rowFz = matrix.writeLine(cIndex++);
-        rowFz.addCol(tri[0], Deriv(0, 0, weightA));
-        rowFz.addCol(tri[1], Deriv(0, 0, weightB));
-        rowFz.addCol(tri[2], Deriv(0, 0, weightC));
+        rowFz.addCol(tri[0], factor * Deriv(0, 0, weightA));
+        rowFz.addCol(tri[1], factor * Deriv(0, 0, weightB));
+        rowFz.addCol(tri[2], factor * Deriv(0, 0, weightC));
         
         // --- Rows 3, 4: Sliding (dU, dV) in Cartesian Tangent Plane ---
         Real du_dU = 1.0 / v1x;
@@ -378,15 +382,15 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
 
         // Row 3: Sliding U (dU)
         MatrixDerivRowIterator rowSlideU = matrix.writeLine(cIndex++);
-        rowSlideU.addCol(tri[0], (-(du_dU + dv_dU)) * scaledGradient);
-        rowSlideU.addCol(tri[1], du_dU * scaledGradient);
-        rowSlideU.addCol(tri[2], dv_dU * scaledGradient);
+        rowSlideU.addCol(tri[0], factor * (-(du_dU + dv_dU)) * scaledGradient);
+        rowSlideU.addCol(tri[1], factor * du_dU * scaledGradient);
+        rowSlideU.addCol(tri[2], factor * dv_dU * scaledGradient);
         
         // Row 4: Sliding V (dV)
         MatrixDerivRowIterator rowSlideV = matrix.writeLine(cIndex++);
-        rowSlideV.addCol(tri[0], (-(du_dV + dv_dV)) * scaledGradient);
-        rowSlideV.addCol(tri[1], du_dV * scaledGradient);
-        rowSlideV.addCol(tri[2], dv_dV * scaledGradient);
+        rowSlideV.addCol(tri[0], factor * (-(du_dV + dv_dV)) * scaledGradient);
+        rowSlideV.addCol(tri[1], factor * du_dV * scaledGradient);
+        rowSlideV.addCol(tri[2], factor * dv_dV * scaledGradient);
     }
     
     cMatrix.endEdit();
@@ -500,11 +504,12 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
     if (damping > 1.0) damping = 1.0;
     
     for(unsigned int i=0; i<n_triangles; i++) {
-        Real Fx = lambda[ i*5 + 0];
-        Real Fy = lambda[ i*5 + 1];
-        Real Fz = lambda[ i*5 + 2];
-        Real dU = lambda[ i*5 + 3];
-        Real dV = lambda[ i*5 + 4];
+        Real factor = d_jacobianScaleFactor.getValue();
+        Real Fx = lambda[ i*5 + 0] * factor;
+        Real Fy = lambda[ i*5 + 1] * factor;
+        Real Fz = lambda[ i*5 + 2] * factor;
+        Real dU = lambda[ i*5 + 3] * factor;
+        Real dV = lambda[ i*5 + 4] * factor;
 
         unsigned int triangleIdx = m_activeTriangles[i];
         const Triangle& tri = triangles[triangleIdx];
@@ -531,6 +536,10 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         // DECODING: Recover physical step (Cartesian distance in tangent plane)
         // dU /= jacobianScale;
         // dV /= jacobianScale;
+
+        // Apply sliding multiplication factor to restore physical units
+        // dU *= d_jacobianScaleFactor.getValue();
+        // dV *= d_jacobianScaleFactor.getValue();
 
         // Safety check 1: Detect NaN/Inf
         if (std::isnan(Fx) || std::isnan(Fy) || std::isnan(Fz) || std::isnan(dU) || std::isnan(dV) ||
