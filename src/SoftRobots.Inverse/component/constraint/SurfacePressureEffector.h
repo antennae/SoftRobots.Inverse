@@ -57,6 +57,7 @@ public:
 protected:
   sofa::Data<Real> d_targetPressure;
   sofa::Data<Real> d_initPressure;
+  sofa::Data<Real> d_additionalInitalVolume;
   sofa::Data<Real> d_weight;
   sofa::Data<Real> d_currentPressure;
   sofa::Data<Real> d_targetVolume;

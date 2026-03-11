@@ -24,6 +24,8 @@ SurfacePressureEffector<DataTypes>::SurfacePressureEffector(
                                 "Target pressure for the cavity")),
       d_initPressure(initData(&d_initPressure, (Real)0.0, "initPressure",
                               "Initial pressure in the cavity")),
+      d_additionalInitalVolume(initData(&d_additionalInitalVolume, (Real)0.0, "additionalInitialVolume",
+                              "Additional initial volume to add to the cavity volume at the beginning of the simulation")),
       d_weight(initData(&d_weight, (Real)1.0, "weight", "Weight of the constraint")) {}
 
 template <class DataTypes>
@@ -41,7 +43,7 @@ template <class DataTypes> void SurfacePressureEffector<DataTypes>::init() {
       *m_state->read(sofa::core::vec_id::read_access::position);
   Real volume = getCavityVolume(positions.ref());
   d_initialCavityVolume.setValue(volume);
-  d_cavityVolume.setValue(volume);
+  d_cavityVolume.setValue(volume + d_additionalInitalVolume.getValue());
   d_currentPressure.setValue(d_initPressure.getValue());
 
   d_initialCavityVolume.setDisplayed(true);
@@ -61,7 +63,7 @@ void SurfacePressureEffector<DataTypes>::getConstraintViolation(
       sofa::helper::getReadAccessor(this->d_constraintIndex);
 
   double v = getCavityVolume(m_state->readPositions().ref());
-  d_cavityVolume.setValue(v);
+  d_cavityVolume.setValue(v + d_additionalInitalVolume.getValue());
   d_pressure.setValue(
       (d_initPressure.getValue() * d_initialCavityVolume.getValue()) /
       d_cavityVolume.getValue());
