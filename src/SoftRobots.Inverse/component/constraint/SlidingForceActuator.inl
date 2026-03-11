@@ -138,9 +138,9 @@ void SlidingForceActuator<DataTypes>::initData()
             sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
             n.normalize();
 
-            m_lambdaInit[i*5 + 0] = n[0] * f0[0]; 
-            m_lambdaInit[i*5 + 1] = n[1] * f0[1];
-            m_lambdaInit[i*5 + 2] = n[2] * f0[2]; 
+            m_lambdaInit[i*5 + 0] = n[0] * f0.norm(); 
+            m_lambdaInit[i*5 + 1] = n[1] * f0.norm();
+            m_lambdaInit[i*5 + 2] = n[2] * f0.norm(); 
             m_lambdaInit[i*5 + 3] = 0.0;
             m_lambdaInit[i*5 + 4] = 0.0; 
         }
@@ -329,8 +329,9 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         Real v1x = v1 * e1;
         Real v2x = v2 * e1;
         Real v2y = v2 * e2;
+        if (std::abs(v1x) < 1e-12) v1x = 1.0;
+        if (std::abs(v2y) < 1e-12) v2y = 1.0;
         Real det = v1x * v2y;
-        if (std::abs(det) < 1e-12) det = 1.0;
 
         Real weightC = local[1] / v2y;
         Real weightB = (local[0] - weightC * v2x) / v1x;
@@ -583,8 +584,8 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         Real v1x = v1 * e1;
         Real v2x = v2 * e1;
         Real v2y = v2 * e2;
-        Real det = v1x * v2y;
-        if (std::abs(det) < 1e-12) det = 1.0;
+        if (std::abs(v1x) < 1e-12) v1x = 1.0;
+        if (std::abs(v2y) < 1e-12) v2y = 1.0;
 
         Real weightC = m_activeLocalCoords[i][1] / v2y;
         Real weightB = (m_activeLocalCoords[i][0] - weightC * v2x) / v1x;
