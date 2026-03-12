@@ -41,10 +41,23 @@ template <class DataTypes> void SurfacePressureEffector<DataTypes>::init() {
 
   ReadAccessor<sofa::Data<VecCoord>> positions =
       *m_state->read(sofa::core::vec_id::read_access::position);
-  Real volume = getCavityVolume(positions.ref());
-  d_initialCavityVolume.setValue(volume);
-  d_cavityVolume.setValue(volume + d_additionalInitalVolume.getValue());
-  d_currentPressure.setValue(d_initPressure.getValue());
+  Real meshVolume = getCavityVolume(positions.ref());
+  Real extraVolume = d_additionalInitalVolume.getValue();
+  Real totalInitialVolume = meshVolume + extraVolume;
+
+  d_initialCavityVolume.setValue(meshVolume);
+  d_cavityVolume.setValue(totalInitialVolume);
+  
+  Real initialPressure = d_initPressure.getValue();
+  d_currentPressure.setValue(initialPressure);
+  d_pressure.setValue(initialPressure);
+
+  // Thermodynamic Target: P_init * V_total_init = P_target * V_total_target
+  Real targetTotalVolume = totalInitialVolume;
+  if (std::abs(d_targetPressure.getValue()) > 1e-9) {
+      targetTotalVolume = (initialPressure * totalInitialVolume) / d_targetPressure.getValue();
+  }
+  d_targetVolume.setValue(targetTotalVolume);
 
   d_initialCavityVolume.setDisplayed(true);
   d_currentPressure.setDisplayed(true);
@@ -62,25 +75,28 @@ void SurfacePressureEffector<DataTypes>::getConstraintViolation(
   const auto &constraintIndex =
       sofa::helper::getReadAccessor(this->d_constraintIndex);
 
-  double v = getCavityVolume(m_state->readPositions().ref());
-  d_cavityVolume.setValue(v + d_additionalInitalVolume.getValue());
-  d_pressure.setValue(
-      (d_initPressure.getValue() * d_initialCavityVolume.getValue()) /
-      d_cavityVolume.getValue());
+  Real currentMeshVolume = getCavityVolume(m_state->readPositions().ref());
+  Real extraVolume = d_additionalInitalVolume.getValue();
+  Real currentTotalVolume = currentMeshVolume + extraVolume;
+  
+  d_cavityVolume.setValue(currentTotalVolume);
 
-  // V_target = (P_init * V_init) / P_target
-  Real finalTargetVolume = 0;
+  Real initialPressure = d_initPressure.getValue();
+  Real totalInitialVolume = d_initialCavityVolume.getValue() + extraVolume;
+  
+  // Update current pressure based on PV=const
+  d_pressure.setValue((initialPressure * totalInitialVolume) / currentTotalVolume);
+
+  // Update target total volume if the user changed the target pressure
+  Real targetTotalVolume = currentTotalVolume;
   if (std::abs(d_targetPressure.getValue()) > 1e-9) {
-      finalTargetVolume = (d_initPressure.getValue() * d_initialCavityVolume.getValue()) / d_targetPressure.getValue();
+      targetTotalVolume = (initialPressure * totalInitialVolume) / d_targetPressure.getValue();
   }
+  d_targetVolume.setValue(targetTotalVolume);
 
-// No smoothing to ensure the PV = const behavior
-//   Real smoothedTargetVolume = this->getTarget(finalTargetVolume, d_cavityVolume.getValue());
-  d_targetVolume.setValue(finalTargetVolume);
-
-  // Apply weight to the violation
+  // The violation is the difference between current total volume and target total volume.
   Real dfree =
-      Jdx->element(0) + (d_cavityVolume.getValue() - d_targetVolume.getValue()) * d_weight.getValue();
+      Jdx->element(0) + (currentTotalVolume - targetTotalVolume) * d_weight.getValue();
 
   resV->set(constraintIndex, dfree);
 
@@ -166,8 +182,9 @@ void SurfacePressureEffector<DataTypes>::storeLambda(const ConstraintParams* cPa
     if(d_componentState.getValue() != ComponentState::Valid)
             return ;
     
+    Real totalInitialVolume = d_initialCavityVolume.getValue() + d_additionalInitalVolume.getValue();
     d_pressure.setValue(
-        (d_initPressure.getValue() * d_initialCavityVolume.getValue()) /
+        (d_initPressure.getValue() * totalInitialVolume) /
         d_cavityVolume.getValue());
 
     // Compute actual cavity volume and volume growth from updated positions of mechanical
