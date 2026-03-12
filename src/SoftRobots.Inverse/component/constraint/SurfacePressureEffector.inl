@@ -26,7 +26,8 @@ SurfacePressureEffector<DataTypes>::SurfacePressureEffector(
                               "Initial pressure in the cavity")),
       d_additionalInitalVolume(initData(&d_additionalInitalVolume, (Real)0.0, "additionalInitialVolume",
                               "Additional initial volume to add to the cavity volume at the beginning of the simulation")),
-      d_weight(initData(&d_weight, (Real)1.0, "weight", "Weight of the constraint")) {}
+      d_weight(initData(&d_weight, (Real)1.0, "weight", "Weight of the constraint")),
+      d_systemCompliance(initData(&d_systemCompliance, (Real)0.0, "systemCompliance", "Compliance of the system (tubes, sensor) in mm^3/Pa. Relax PV=C if > 0")) {}
 
 template <class DataTypes>
 SurfacePressureEffector<DataTypes>::~SurfacePressureEffector() {}
@@ -52,10 +53,13 @@ template <class DataTypes> void SurfacePressureEffector<DataTypes>::init() {
   d_currentPressure.setValue(initialPressure);
   d_pressure.setValue(initialPressure);
 
-  // Thermodynamic Target: P_init * V_total_init = P_target * V_total_target
+  // Thermodynamic Target: P_init * V_gas_init = P_target * V_gas_target
+  // V_gas = V_mesh + V_extra + S * (P - P_init)
   Real targetTotalVolume = totalInitialVolume;
+  Real S = d_systemCompliance.getValue();
   if (std::abs(d_targetPressure.getValue()) > 1e-9) {
-      targetTotalVolume = (initialPressure * totalInitialVolume) / d_targetPressure.getValue();
+      Real targetGasVolume = (initialPressure * totalInitialVolume) / d_targetPressure.getValue();
+      targetTotalVolume = targetGasVolume - S * (d_targetPressure.getValue() - initialPressure);
   }
   d_targetVolume.setValue(targetTotalVolume);
 
@@ -83,14 +87,26 @@ void SurfacePressureEffector<DataTypes>::getConstraintViolation(
 
   Real initialPressure = d_initPressure.getValue();
   Real totalInitialVolume = d_initialCavityVolume.getValue() + extraVolume;
+  Real S = d_systemCompliance.getValue();
   
-  // Update current pressure based on PV=const
-  d_pressure.setValue((initialPressure * totalInitialVolume) / currentTotalVolume);
+  // Update current pressure based on gas law with system compliance
+  // P * (V_mesh + V_extra + S*(P - P_init)) = P_init * V_total_init
+  // S*P^2 + (V_curr - S*P_init)*P - C = 0
+  if (S > 1e-12) {
+      Real V_curr = currentTotalVolume;
+      Real C = initialPressure * totalInitialVolume;
+      Real b = V_curr - S * initialPressure;
+      Real p_current = (-b + std::sqrt(b * b + 4 * S * C)) / (2 * S);
+      d_pressure.setValue(p_current);
+  } else {
+      d_pressure.setValue((initialPressure * totalInitialVolume) / currentTotalVolume);
+  }
 
   // Update target total volume if the user changed the target pressure
   Real targetTotalVolume = currentTotalVolume;
   if (std::abs(d_targetPressure.getValue()) > 1e-9) {
-      targetTotalVolume = (initialPressure * totalInitialVolume) / d_targetPressure.getValue();
+      Real targetGasVolume = (initialPressure * totalInitialVolume) / d_targetPressure.getValue();
+      targetTotalVolume = targetGasVolume - S * (d_targetPressure.getValue() - initialPressure);
   }
   d_targetVolume.setValue(targetTotalVolume);
 
@@ -182,10 +198,23 @@ void SurfacePressureEffector<DataTypes>::storeLambda(const ConstraintParams* cPa
     if(d_componentState.getValue() != ComponentState::Valid)
             return ;
     
-    Real totalInitialVolume = d_initialCavityVolume.getValue() + d_additionalInitalVolume.getValue();
-    d_pressure.setValue(
-        (d_initPressure.getValue() * totalInitialVolume) /
-        d_cavityVolume.getValue());
+    Real extraVolume = d_additionalInitalVolume.getValue();
+    Real initialPressure = d_initPressure.getValue();
+    Real totalInitialVolume = d_initialCavityVolume.getValue() + extraVolume;
+    Real S = d_systemCompliance.getValue();
+    Real currentTotalVolume = d_cavityVolume.getValue();
+
+    if (S > 1e-12) {
+        Real V_curr = currentTotalVolume;
+        Real C = initialPressure * totalInitialVolume;
+        Real b = V_curr - S * initialPressure;
+        // P * (V_curr + S*(P - P_init)) = C
+        // S*P^2 + (V_curr - S*P_init)*P - C = 0
+        Real p_current = (-b + std::sqrt(b * b + 4 * S * C)) / (2 * S);
+        d_pressure.setValue(p_current);
+    } else {
+        d_pressure.setValue((initialPressure * totalInitialVolume) / currentTotalVolume);
+    }
 
     // Compute actual cavity volume and volume growth from updated positions of mechanical
     // Eulalie.C: For now the position of the mechanical state is not up to date when storeLambda() is called

@@ -61,6 +61,7 @@ protected:
   sofa::Data<Real> d_weight;
   sofa::Data<Real> d_currentPressure;
   sofa::Data<Real> d_targetVolume;
+  sofa::Data<Real> d_systemCompliance;
 
 private:
   // void updateTargetPressure();
