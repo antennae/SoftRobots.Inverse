@@ -27,7 +27,7 @@ SurfacePressureEffector<DataTypes>::SurfacePressureEffector(
       d_additionalInitalVolume(initData(&d_additionalInitalVolume, (Real)0.0, "additionalInitialVolume",
                               "Additional initial volume to add to the cavity volume at the beginning of the simulation")),
       d_weight(initData(&d_weight, (Real)1.0, "weight", "Weight of the constraint")),
-      d_systemCompliance(initData(&d_systemCompliance, (Real)0.0, "systemCompliance", "Compliance of the system (tubes, sensor) in mm^3/Pa. Relax PV=C if > 0")) {}
+      d_systemCompliance(initData(&d_systemCompliance, (Real)0.0, "systemCompliance", "Volumetric compliance of the pneumatic circuit (tubes, fittings, sensors, unmeshed volumes)\n in mm³/Pa. Relaxes the ideal gas law PV=const to P·(V + S·(P−P₀)) = P₀·V₀ when > 0.")) {}
 
 template <class DataTypes>
 SurfacePressureEffector<DataTypes>::~SurfacePressureEffector() {}
