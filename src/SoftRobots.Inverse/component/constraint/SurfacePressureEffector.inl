@@ -47,7 +47,7 @@ template <class DataTypes> void SurfacePressureEffector<DataTypes>::init() {
   Real totalInitialVolume = meshVolume + extraVolume;
 
   d_initialCavityVolume.setValue(meshVolume);
-  d_cavityVolume.setValue(totalInitialVolume);
+  d_cavityVolume.setValue(meshVolume);
   
   Real initialPressure = d_initPressure.getValue();
   d_currentPressure.setValue(initialPressure);
@@ -83,7 +83,7 @@ void SurfacePressureEffector<DataTypes>::getConstraintViolation(
   Real extraVolume = d_additionalInitalVolume.getValue();
   Real currentTotalVolume = currentMeshVolume + extraVolume;
   
-  d_cavityVolume.setValue(currentTotalVolume);
+  d_cavityVolume.setValue(currentTotalVolume-extraVolume);
 
   Real initialPressure = d_initPressure.getValue();
   Real totalInitialVolume = d_initialCavityVolume.getValue() + extraVolume;
@@ -202,7 +202,7 @@ void SurfacePressureEffector<DataTypes>::storeLambda(const ConstraintParams* cPa
     Real initialPressure = d_initPressure.getValue();
     Real totalInitialVolume = d_initialCavityVolume.getValue() + extraVolume;
     Real S = d_systemCompliance.getValue();
-    Real currentTotalVolume = d_cavityVolume.getValue();
+    Real currentTotalVolume = d_cavityVolume.getValue() + extraVolume;
 
     if (S > 1e-12) {
         Real V_curr = currentTotalVolume;
