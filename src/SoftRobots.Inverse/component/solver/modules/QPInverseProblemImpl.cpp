@@ -34,6 +34,7 @@
 #include <SoftRobots.Inverse/component/solver/modules/NLCPSolver.h>
 #include <SoftRobots.Inverse/component/constraint/ForceLocalizationActuator.h> // Added to access getSparsity()
 #include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h> // Added
+#include <SoftRobots.Inverse/component/constraint/SmoothSlidingForceActuator.h>
 
 #include <sofa/helper/AdvancedTimer.h>
 #include <sofa/component/collision/response/contact/CollisionResponse.h>
@@ -46,6 +47,7 @@ namespace softrobotsinverse::solver::module
 using softrobots::behavior::SoftRobotsBaseConstraint;
 using softrobotsinverse::constraint::ForceLocalizationActuator; // Added
 using softrobotsinverse::constraint::SlidingForceActuator; // Added
+using softrobotsinverse::constraint::SmoothSlidingForceActuator; // Added
 using sofa::defaulttype::Vec3Types; // Added
 using sofa::defaulttype::Rigid3Types; // Added
 
@@ -244,6 +246,25 @@ void QPInverseProblemImpl::buildQPMatrices()
             
             // Check for SlidingForceActuator to separate force and sliding regularization
             if (auto sfa = dynamic_cast<SlidingForceActuator<Vec3Types>*>(ac)) {
+
+                unsigned int lineIdx = actuatorsNbLines; // 0-based index
+                unsigned int mod5 = lineIdx % 5;
+                if (mod5 >= 3) { // 3 or 4 -> du or dv
+                    if (sfa->hasEpsilonSliding() && sfa->hasRidgeSliding()) {
+                        // currentEpsilon = sfa->getEpsilonSliding();
+                        currentEpsilon = sfa->getEpsilonSliding();
+                        currentRidge = sfa->getRidgeSliding(); // Use ridge for sliding regularization
+                    }
+                }
+                else{
+                    if (sfa->hasEpsilonForce() && sfa->hasRidgeForce()) {
+                        currentEpsilon = sfa->getEpsilonForce();
+                        currentRidge = sfa->getRidgeForce(); // Use ridge for force regularization
+                    }
+                }
+            }
+
+            if (auto sfa = dynamic_cast<SmoothSlidingForceActuator<Vec3Types>*>(ac)) {
 
                 unsigned int lineIdx = actuatorsNbLines; // 0-based index
                 unsigned int mod5 = lineIdx % 5;

@@ -104,4 +104,5 @@ SOFA_LINK_CLASS(UnilateralPlaneConstraint)
 SOFA_LINK_CLASS(VolumeFromTriangles)
 SOFA_LINK_CLASS(VolumeFromTetrahedrons)
 SOFA_LINK_CLASS(SlidingForceActuator)
+SOFA_LINK_CLASS(SmoothSlidingForceActuator)
 
