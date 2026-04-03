@@ -20,19 +20,19 @@ template<class DataTypes>
 SmoothSlidingForceActuator<DataTypes>::SmoothSlidingForceActuator(MechanicalState* object)
     : Inherit1(object)
     , d_triangleIndices(initData(&d_triangleIndices, "triangleIndices", "Indices of active triangles"))
-    , d_localCoords(initData(&d_localCoords, "localCoords", "Local Cartesian coords (U, V, 0) in tangent plane for each point."))
+    , d_localCoords(initData(&d_localCoords, "localCoords", "Barycentric coords (wB, wC, 0) for each contact point."))
     , d_maxForce(initData(&d_maxForce, "maxForce", "Max normal force"))
     , d_minForce(initData(&d_minForce, "minForce", "Min normal force"))
     , d_initForce(initData(&d_initForce, Vec3(0.0, 0.0, 0.0), "initForce", "Initial force guess"))
     , d_maxForceStep(initData(&d_maxForceStep, Real(0.0), "maxForceStep", "Max change in force magnitude per iteration (0 = no limit)"))
-    , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Trust region for sliding (Cartesian step limit in tangent plane)"))
+    , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Max sliding step in mm per iteration"))
     , d_stepDamping(initData(&d_stepDamping, Real(0.5), "stepDamping", "Damping factor for sliding step (0.1). Lower reduces jitter."))
     , d_epsilonForce(initData(&d_epsilonForce, Real(1e-3), "epsilonForce", "Regularization for force constraint."))
     , d_epsilonSliding(initData(&d_epsilonSliding, Real(1e-3), "epsilonSliding", "Regularization for sliding constraint."))
     , d_ridgeForce(initData(&d_ridgeForce, Real(1e-12), "ridgeForce", "Ridge for force variable."))
     , d_ridgeSliding(initData(&d_ridgeSliding, Real(1e-12), "ridgeSliding", "Ridge for sliding variable."))
     , d_jacobianScaleFactor(initData(&d_jacobianScaleFactor, Real(1.0), "jacobianScaleFactor", "Factor to scale constraint Jacobian rows."))
-    , d_dirMomentum(initData(&d_dirMomentum, Real(0.0), "dirMomentum", "EMA momentum for the force direction used in the sliding Jacobian (0=off, ~0.7=smooth). Breaks the force-direction feedback loop."))
+    , d_dirMomentum(initData(&d_dirMomentum, Real(0.0), "dirMomentum", "EMA momentum for the force direction used in the sliding Jacobian (0=off, ~0.7=smooth)."))
     , d_currentForces(initData(&d_currentForces, "currentForces", "Current forces applied"))
     , d_currentLocation(initData(&d_currentLocation, "currentLocation", "Current force locations in world coordinates"))
     , d_showForce(initData(&d_showForce, false, "showForce", "Visualize forces"))
@@ -68,30 +68,31 @@ template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::initData()
 {
     unsigned int nbPoints = this->d_triangleIndices.getValue().size();
-    this->m_dim = nbPoints * 5; 
+    this->m_dim = nbPoints * 5;
     this->m_nbLines = this->m_dim;
     this->m_activeTriangles = this->d_triangleIndices.getValue();
-    
+
+    // State: m_activeLocalCoords[i] = (wB, wC, 0) — barycentric coordinates.
+    // wA = 1 - wB - wC. Frame-independent, numerically stable.
     if(this->d_localCoords.getValue().size() == nbPoints) {
         this->m_activeLocalCoords = this->d_localCoords.getValue();
     } else {
-        this->m_activeLocalCoords.assign(nbPoints, sofa::type::Vec3(0,0,0));
-        const auto& triangles = (this->d_topology.get()) ? this->d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
-        if (this->m_state && !triangles.empty()) {
-             ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
-             for(unsigned int i=0; i<nbPoints; i++) {
-                 unsigned int triIdx = this->m_activeTriangles[i];
-                 if(triIdx < triangles.size()) {
-                     const Triangle& t = triangles[triIdx];
-                     Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-                     Coord P = (A+B+C)/3.0;
-                     Deriv v1 = B-A; sofa::type::Vec3 e1 = v1; e1.normalize();
-                     sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-                     sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
-                     this->m_activeLocalCoords[i][0] = (P-A)*e1; this->m_activeLocalCoords[i][1] = (P-A)*e2;
-                 }
-             }
+        // Default: centroid of each triangle (wA = wB = wC = 1/3)
+        this->m_activeLocalCoords.assign(nbPoints, sofa::type::Vec3(1.0/3, 1.0/3, 0));
+    }
+
+    // Compute mean edge length for step-size conversion (mm -> barycentric)
+    if (this->d_topology.get() && this->m_state) {
+        const auto& triangles = this->d_topology.get()->getTriangles();
+        ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
+        Real sumLen = 0.0; int count = 0;
+        for (const auto& tri : triangles) {
+            sumLen += (pos[tri[1]] - pos[tri[0]]).norm();
+            sumLen += (pos[tri[2]] - pos[tri[1]]).norm();
+            sumLen += (pos[tri[0]] - pos[tri[2]]).norm();
+            count += 3;
         }
+        m_meanEdgeLength = (count > 0 && sumLen > 1e-12) ? sumLen / count : 1.0;
     }
 
     this->m_lambdaInit.assign(this->m_dim, 0.0);
@@ -150,7 +151,10 @@ void SmoothSlidingForceActuator<DataTypes>::updateLimit()
 {
     Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : 1e20;
     Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : -1e20;
-    Real maxStep = this->d_maxStepSize.getValue();
+    // Convert mm step size to barycentric units
+    Real maxStep_bary = (m_meanEdgeLength > 1e-12)
+                        ? this->d_maxStepSize.getValue() / m_meanEdgeLength
+                        : this->d_maxStepSize.getValue();
     Real maxForceStep = this->d_maxForceStep.getValue();
     const auto& currentForces = this->d_currentForces.getValue();
     unsigned int nbPoints = this->m_activeTriangles.size();
@@ -170,10 +174,30 @@ void SmoothSlidingForceActuator<DataTypes>::updateLimit()
             this->m_lambdaMin[i*5 + 1] = minF; this->m_lambdaMax[i*5 + 1] = maxF;
             this->m_lambdaMin[i*5 + 2] = minF; this->m_lambdaMax[i*5 + 2] = maxF;
         }
-        // Sliding bounds: plain Cartesian step limit, no fMag scaling
-        this->m_lambdaMin[i*5 + 3] = -maxStep; this->m_lambdaMax[i*5 + 3] = maxStep;
-        this->m_lambdaMin[i*5 + 4] = -maxStep; this->m_lambdaMax[i*5 + 4] = maxStep;
+        // Sliding bounds in barycentric units
+        this->m_lambdaMin[i*5 + 3] = -maxStep_bary; this->m_lambdaMax[i*5 + 3] = maxStep_bary;
+        this->m_lambdaMin[i*5 + 4] = -maxStep_bary; this->m_lambdaMax[i*5 + 4] = maxStep_bary;
     }
+}
+
+template<class DataTypes>
+void SmoothSlidingForceActuator<DataTypes>::getBarycentricCoords(
+    const sofa::type::Vec3& A, const sofa::type::Vec3& B, const sofa::type::Vec3& C,
+    const sofa::type::Vec3& P, Real& wB, Real& wC)
+{
+    // Möller barycentric decomposition (frame-independent)
+    sofa::type::Vec3 v0 = B - A;  // edge AB
+    sofa::type::Vec3 v1 = C - A;  // edge AC
+    sofa::type::Vec3 v2 = P - A;
+    Real d00 = v0 * v0;
+    Real d01 = v0 * v1;
+    Real d11 = v1 * v1;
+    Real d20 = v2 * v0;
+    Real d21 = v2 * v1;
+    Real denom = d00 * d11 - d01 * d01;
+    if (std::abs(denom) < 1e-12) { wB = 1.0/3; wC = 1.0/3; return; }
+    wB = (d11 * d20 - d01 * d21) / denom;
+    wC = (d00 * d21 - d01 * d20) / denom;
 }
 
 template<class DataTypes>
@@ -189,63 +213,55 @@ void SmoothSlidingForceActuator<DataTypes>::buildConstraintMatrix(const Constrai
     const auto& triangles = this->d_topology.get()->getTriangles();
     const VecCoord& pos = x.getValue();
     MatrixDeriv& matrix = *cMatrix.beginEdit();
-    
+
+    Real factor = this->d_jacobianScaleFactor.getValue();
+
     for(unsigned int i=0; i<this->m_activeTriangles.size(); i++) {
         unsigned int triIdx = this->m_activeTriangles[i];
         if (triIdx >= triangles.size()) continue;
         const Triangle& tri = triangles[triIdx];
-        sofa::type::Vec3 local = this->m_activeLocalCoords[i];
-        const Coord& A = pos[tri[0]]; const Coord& B = pos[tri[1]]; const Coord& C = pos[tri[2]];
-        
-        Deriv v1 = B - A; Deriv v2 = C - A;
-        sofa::type::Vec3 nFace = sofa::type::cross(v1, v2); Real area2 = nFace.norm(); if (area2 > 1e-12) nFace /= area2;
-        sofa::type::Vec3 e1Face = v1; e1Face.normalize();
-        sofa::type::Vec3 e2Face = sofa::type::cross(nFace, e1Face);
+        const sofa::type::Vec3& local = this->m_activeLocalCoords[i];
 
-        Real v1x = v1 * e1Face; Real v2x = v2 * e1Face; Real v2y = v2 * e2Face;
-        if (std::abs(v1x) < 1e-12) v1x = 1.0; if (std::abs(v2y) < 1e-12) v2y = 1.0;
-        Real wC = local[1] / v2y; Real wB = (local[0] - wC * v2x) / v1x; Real wA = 1.0 - wB - wC;
-
-        Real factor = this->d_jacobianScaleFactor.getValue();
+        // Barycentric weights: local = (wB, wC, 0)
+        Real wB = local[0], wC = local[1], wA = 1.0 - wB - wC;
 
         // --- Rows 0, 1, 2: Force components (Fx, Fy, Fz) ---
-        // Identical to SlidingForceActuator: barycentric interpolation of identity
-        for (int dim=0; dim<3; ++dim) {
+        // Barycentric interpolation of identity: each component gets wA/wB/wC weight
+        for (int dim = 0; dim < 3; ++dim) {
             MatrixDerivRowIterator row = matrix.writeLine(cIndex++);
             row.addCol(tri[0], factor * Deriv(dim==0?wA:0, dim==1?wA:0, dim==2?wA:0));
             row.addCol(tri[1], factor * Deriv(dim==0?wB:0, dim==1?wB:0, dim==2?wB:0));
             row.addCol(tri[2], factor * Deriv(dim==0?wC:0, dim==1?wC:0, dim==2?wC:0));
         }
 
-        // --- Rows 3, 4: Sliding (dU, dV) ---
-        // Use the SAME weight-derivative structure as the original SlidingForceActuator
-        // (tangent-plane derivatives of barycentric weights), but with the EMA-filtered
-        // force direction as the coupling vector instead of the instantaneous force.
-        Real det = v1x * v2y;
-        Real du_dU = 1.0 / v1x;
-        Real du_dV = -v2x / det;
-        Real dv_dU = 0.0;
-        Real dv_dV = 1.0 / v2y;
-
-        // Smooth force direction for the scaling vector (breaks feedback loop)
+        // --- Rows 3, 4: Sliding (d/dwB, d/dwC) ---
+        // P = wA*A + wB*B + wC*C = A + wB*(B-A) + wC*(C-A)
+        // dP/dwB = B - A, so force shifts from tri[0] to tri[1]: coeffs {-1, +1,  0}
+        // dP/dwC = C - A, so force shifts from tri[0] to tri[2]: coeffs {-1,  0, +1}
+        // Scale by force direction so the optimizer moves the contact point.
         sofa::type::Vec3 smoothF = (this->m_smoothForces.size() > i)
                                    ? this->m_smoothForces[i]
-                                   : sofa::type::Vec3(0,0,0);
+                                   : sofa::type::Vec3(0, 0, 0);
         Real smoothFMag = smoothF.norm();
-        if (smoothFMag < 1e-6) { smoothF = nFace; smoothFMag = 1.0; }
-        sofa::type::Vec3 scaledGradient = smoothF / smoothFMag;
+        if (smoothFMag < 1e-6) {
+            // Fall back to face normal
+            sofa::type::Vec3 nFace = sofa::type::cross(
+                pos[tri[1]] - pos[tri[0]], pos[tri[2]] - pos[tri[0]]);
+            Real a2 = nFace.norm();
+            smoothF = (a2 > 1e-12) ? nFace / a2 : sofa::type::Vec3(0, 0, 1);
+        } else {
+            smoothF /= smoothFMag;
+        }
 
-        // Row 3: Sliding U (dU)
-        MatrixDerivRowIterator rowSlideU = matrix.writeLine(cIndex++);
-        rowSlideU.addCol(tri[0], factor * (-(du_dU + dv_dU)) * scaledGradient);
-        rowSlideU.addCol(tri[1], factor * du_dU * scaledGradient);
-        rowSlideU.addCol(tri[2], factor * dv_dU * scaledGradient);
+        // Row 3: d/dwB
+        MatrixDerivRowIterator rowSlideB = matrix.writeLine(cIndex++);
+        rowSlideB.addCol(tri[0], -factor * smoothF);
+        rowSlideB.addCol(tri[1],  factor * smoothF);
 
-        // Row 4: Sliding V (dV)
-        MatrixDerivRowIterator rowSlideV = matrix.writeLine(cIndex++);
-        rowSlideV.addCol(tri[0], factor * (-(du_dV + dv_dV)) * scaledGradient);
-        rowSlideV.addCol(tri[1], factor * du_dV * scaledGradient);
-        rowSlideV.addCol(tri[2], factor * dv_dV * scaledGradient);
+        // Row 4: d/dwC
+        MatrixDerivRowIterator rowSlideC = matrix.writeLine(cIndex++);
+        rowSlideC.addCol(tri[0], -factor * smoothF);
+        rowSlideC.addCol(tri[2],  factor * smoothF);
     }
     cMatrix.endEdit();
     this->m_nbLines = cIndex - startId;
@@ -267,28 +283,43 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
     const auto& triangles = this->d_topology.get()->getTriangles();
     ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
     if (triIdx >= triangles.size()) return;
-    const Triangle& t = triangles[triIdx];
-    Coord A0 = pos[t[0]]; Coord B0 = pos[t[1]]; Coord C0 = pos[t[2]];
-    Deriv v1_0 = B0 - A0; sofa::type::Vec3 e1_0 = v1_0; e1_0.normalize();
-    sofa::type::Vec3 n_0 = sofa::type::cross(B0-A0, C0-A0); n_0.normalize();
-    sofa::type::Vec3 e2_0 = sofa::type::cross(n_0, e1_0);
-    Coord candidatePos = A0 + e1_0 * local[0] + e2_0 * local[1];
-    Real minDist = 1e99; int bestTri = -1; sofa::type::Vec3 bestLocal;
-    for(unsigned int i=0; i<triangles.size(); i++) {
-        sofa::type::Vec3 close; const Triangle& tri = triangles[i];
-        if (sofa::geometry::proximity::computeClosestPointOnTriangleToPoint(sofa::type::Vec3(pos[tri[0]]), sofa::type::Vec3(pos[tri[1]]), sofa::type::Vec3(pos[tri[2]]), sofa::type::Vec3(candidatePos), close)) {
-            Real d = (Coord(close) - candidatePos).norm();
-            if (d < minDist) {
-                minDist = d; bestTri = i;
-                Coord A = pos[tri[0]]; Coord B = pos[tri[1]]; Coord C = pos[tri[2]];
-                Deriv v1 = B - A; sofa::type::Vec3 e1 = v1; e1.normalize();
-                sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-                sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
-                bestLocal[0] = (Coord(close) - A) * e1; bestLocal[1] = (Coord(close) - A) * e2; bestLocal[2] = 0;
-            }
+
+    // Reconstruct 3D candidate from barycentric
+    const Triangle& t0 = triangles[triIdx];
+    Real wB = local[0], wC = local[1], wA = 1.0 - wB - wC;
+    sofa::type::Vec3 candidatePos =
+        sofa::type::Vec3(pos[t0[0]]) * wA +
+        sofa::type::Vec3(pos[t0[1]]) * wB +
+        sofa::type::Vec3(pos[t0[2]]) * wC;
+
+    // Find closest point on mesh surface
+    Real minDist = 1e99;
+    int bestTri = -1;
+    sofa::type::Vec3 bestClose;
+    for(unsigned int j = 0; j < triangles.size(); j++) {
+        sofa::type::Vec3 close;
+        const Triangle& tri = triangles[j];
+        if (sofa::geometry::proximity::computeClosestPointOnTriangleToPoint(
+                sofa::type::Vec3(pos[tri[0]]), sofa::type::Vec3(pos[tri[1]]),
+                sofa::type::Vec3(pos[tri[2]]), candidatePos, close)) {
+            Real d = (close - candidatePos).norm();
+            if (d < minDist) { minDist = d; bestTri = j; bestClose = close; }
         }
     }
-    if (bestTri != -1) { triIdx = bestTri; local = bestLocal; }
+    if (bestTri < 0) return;
+
+    // Compute barycentric coords of the closest point
+    const Triangle& bt = triangles[bestTri];
+    Real newWB, newWC;
+    getBarycentricCoords(sofa::type::Vec3(pos[bt[0]]), sofa::type::Vec3(pos[bt[1]]),
+                         sofa::type::Vec3(pos[bt[2]]), bestClose, newWB, newWC);
+    // Clamp to valid range
+    newWB = std::max(Real(0), newWB);
+    newWC = std::max(Real(0), newWC);
+    if (newWB + newWC > 1.0) { Real s = 1.0 / (newWB + newWC); newWB *= s; newWC *= s; }
+
+    triIdx = bestTri;
+    local = sofa::type::Vec3(newWB, newWC, 0);
 }
 
 template<class DataTypes>
@@ -299,14 +330,25 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
     const auto& triangles = this->d_topology.get()->getTriangles();
     ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
     WriteAccessor<Data<sofa::type::vector<sofa::type::Vec3>>> currentForces = this->d_currentForces;
-    Real maxStep = this->d_maxStepSize.getValue(); Real damping = this->d_stepDamping.getValue();
+    Real damping = this->d_stepDamping.getValue();
+    // Max step in barycentric units (same conversion as updateLimit)
+    Real maxStep_bary = (m_meanEdgeLength > 1e-12)
+                        ? this->d_maxStepSize.getValue() / m_meanEdgeLength
+                        : this->d_maxStepSize.getValue();
+
     for(unsigned int i=0; i<nbPoints; i++) {
-        Real Fx = lambda[i*5 + 0]; Real Fy = lambda[i*5 + 1]; Real Fz = lambda[i*5 + 2];
-        Real dU_weighted = lambda[i*5 + 3]; Real dV_weighted = lambda[i*5 + 4];
-        if (std::isnan(Fx+Fy+Fz+dU_weighted+dV_weighted)) continue;
+        Real factor = this->d_jacobianScaleFactor.getValue();
+        Real Fx = lambda[i*5 + 0] * factor; 
+        Real Fy = lambda[i*5 + 1] * factor; 
+        Real Fz = lambda[i*5 + 2] * factor;
+        Real dwB = lambda[i*5 + 3] * factor; 
+        Real dwC = lambda[i*5 + 4] * factor;
+        if (std::isnan(Fx + Fy + Fz + dwB + dwC)) continue;
+
+        // Update force
         currentForces[i] = sofa::type::Vec3(Fx, Fy, Fz);
 
-        // --- EMA: update smooth force direction used by next Jacobian build ---
+        // EMA: update smooth force direction used by next Jacobian build
         Real momentum = this->d_dirMomentum.getValue();
         if (momentum > 0.0 && this->m_smoothForces.size() > i)
             this->m_smoothForces[i] = this->m_smoothForces[i] * momentum
@@ -314,37 +356,31 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
         else if (this->m_smoothForces.size() > i)
             this->m_smoothForces[i] = currentForces[i];
 
-        // --- Warm-start: next QP begins from current solution, not stale initForce ---
+        // Warm-start for next QP
         this->m_lambdaInit[i*5 + 0] = currentForces[i][0];
         this->m_lambdaInit[i*5 + 1] = currentForces[i][1];
         this->m_lambdaInit[i*5 + 2] = currentForces[i][2];
         this->m_lambdaInit[i*5 + 3] = 0.0;
         this->m_lambdaInit[i*5 + 4] = 0.0;
 
-        unsigned int triIdx = this->m_activeTriangles[i];
-        const Triangle& tri = triangles[triIdx];
-        Coord A = pos[tri[0]]; Coord B = pos[tri[1]]; Coord C = pos[tri[2]];
-        Deriv v1 = B - A; Deriv v2 = C - A;
-        sofa::type::Vec3 nFace = sofa::type::cross(v1, v2); nFace.normalize();
-        sofa::type::Vec3 e1Face = v1; e1Face.normalize();
-        sofa::type::Vec3 e2Face = sofa::type::cross(nFace, e1Face);
+        // Apply damping
+        dwB *= damping;
+        dwC *= damping;
 
-        // Sliding variables are plain Cartesian steps in the face tangent plane
-        // (matches the Jacobian which uses face-local du_dU/dv_dV derivatives)
-        Real dU = dU_weighted; Real dV = dV_weighted;
+        // Clamp step magnitude in barycentric space
+        Real stepMag = std::sqrt(dwB*dwB + dwC*dwC);
+        if (stepMag > maxStep_bary) {
+            Real s = maxStep_bary / stepMag;
+            dwB *= s; dwC *= s;
+        }
 
-        dU *= damping; dV *= damping;
-        if (std::sqrt(dU*dU + dV*dV) > maxStep) { Real s = maxStep / std::sqrt(dU*dU+dV*dV); dU *= s; dV *= s; }
+        // Update barycentric coordinates
+        this->m_activeLocalCoords[i][0] += dwB;
+        this->m_activeLocalCoords[i][1] += dwC;
 
-        // Update local coords directly in the face tangent frame
-        this->m_activeLocalCoords[i][0] += dU;
-        this->m_activeLocalCoords[i][1] += dV;
-
-        // Check OOB via barycentric weights and project if needed
-        Real v1x = v1 * e1Face; Real v2x = v2 * e1Face; Real v2y = v2 * e2Face;
-        if (std::abs(v1x) < 1e-12) v1x = 1.0; if (std::abs(v2y) < 1e-12) v2y = 1.0;
-        Real wC = this->m_activeLocalCoords[i][1] / v2y;
-        Real wB = (this->m_activeLocalCoords[i][0] - wC * v2x) / v1x;
+        // OOB check: if any weight < 0, project back onto mesh
+        Real wB = this->m_activeLocalCoords[i][0];
+        Real wC = this->m_activeLocalCoords[i][1];
         Real wA = 1.0 - wB - wC;
         if (wA < 0 || wB < 0 || wC < 0)
             this->projectToMesh(this->m_activeTriangles[i], this->m_activeLocalCoords[i]);
@@ -352,16 +388,19 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
     this->d_triangleIndices.setValue(this->m_activeTriangles);
     this->d_localCoords.setValue(this->m_activeLocalCoords);
 
-    sofa::type::vector<sofa::type::Vec3> currentLocations; currentLocations.resize(nbPoints);
+    // Compute world-space contact locations from barycentric
+    sofa::type::vector<sofa::type::Vec3> currentLocations;
+    currentLocations.resize(nbPoints);
     for(unsigned int i=0; i<nbPoints; i++) {
         unsigned int triIdx = this->m_activeTriangles[i];
         if(triIdx < triangles.size()) {
             const Triangle& t = triangles[triIdx];
-            Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-            Deriv v1 = B-A; sofa::type::Vec3 e1 = v1; e1.normalize();
-            sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-            sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
-            currentLocations[i] = A + e1 * this->m_activeLocalCoords[i][0] + e2 * this->m_activeLocalCoords[i][1];
+            Real wB2 = this->m_activeLocalCoords[i][0];
+            Real wC2 = this->m_activeLocalCoords[i][1];
+            Real wA2 = 1.0 - wB2 - wC2;
+            currentLocations[i] = sofa::type::Vec3(pos[t[0]]) * wA2
+                                 + sofa::type::Vec3(pos[t[1]]) * wB2
+                                 + sofa::type::Vec3(pos[t[2]]) * wC2;
         }
     }
     this->d_currentLocation.setValue(currentLocations);
@@ -378,19 +417,29 @@ void SmoothSlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
     ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
     const auto& triangles = this->d_topology.get()->getTriangles();
     for(unsigned int i=0; i<this->m_activeTriangles.size(); i++) {
-        unsigned int triIdx = this->m_activeTriangles[i]; if (triIdx >= triangles.size()) continue;
+        unsigned int triIdx = this->m_activeTriangles[i];
+        if (triIdx >= triangles.size()) continue;
         const Triangle& t = triangles[triIdx];
         vparams->drawTool()->drawTriangle(pos[t[0]], pos[t[1]], pos[t[2]], sofa::type::Vec3(0,1,0), sofa::type::RGBAColor::yellow());
-        sofa::type::Vec3 local = this->m_activeLocalCoords[i];
-        Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-        Deriv v1 = B - A; sofa::type::Vec3 e1 = v1; e1.normalize();
-        sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-        sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
-        Coord P = A + e1 * local[0] + e2 * local[1];
-        sofa::type::Vec3 f = this->d_currentForces.getValue().size() > i ? this->d_currentForces.getValue()[i] : sofa::type::Vec3(0,0,0);
+
+        // Contact point from barycentric
+        Real wB = this->m_activeLocalCoords[i][0];
+        Real wC = this->m_activeLocalCoords[i][1];
+        Real wA = 1.0 - wB - wC;
+        Coord P = sofa::type::Vec3(pos[t[0]]) * wA
+                + sofa::type::Vec3(pos[t[1]]) * wB
+                + sofa::type::Vec3(pos[t[2]]) * wC;
+
+        sofa::type::Vec3 f = this->d_currentForces.getValue().size() > i
+                           ? this->d_currentForces.getValue()[i]
+                           : sofa::type::Vec3(0, 0, 0);
         if (f.norm2() < 1e-12) continue;
-        sofa::type::Vec3 dir = f/f.norm();
-        vparams->drawTool()->drawArrow(P - dir * log(f.norm()+1)*this->d_visuScale.getValue(), P, log(f.norm()+1)*this->d_visuScale.getValue()/20.0, sofa::type::RGBAColor::red());
+        sofa::type::Vec3 dir = f / f.norm();
+        vparams->drawTool()->drawArrow(
+            P - dir * log(f.norm()+1) * this->d_visuScale.getValue(),
+            P,
+            log(f.norm()+1) * this->d_visuScale.getValue() / 20.0,
+            sofa::type::RGBAColor::red());
     }
 }
 

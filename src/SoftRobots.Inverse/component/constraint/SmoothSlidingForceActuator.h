@@ -61,6 +61,12 @@ public:
     void storeResults(sofa::type::vector<double> &lambda,
                       sofa::type::vector<double> &delta) override;
 
+    void getBarycentricCoords(const sofa::type::Vec3& A,
+                                         const sofa::type::Vec3& B,
+                                         const sofa::type::Vec3& C,
+                                         const sofa::type::Vec3& P,
+                                         Real& wB, Real& wC);   
+
 protected:
     // Data Inputs
     sofa::Data<sofa::type::vector<unsigned int>> d_triangleIndices; 
@@ -87,6 +93,7 @@ protected:
     sofa::type::vector<sofa::type::Vec3>         m_activeLocalCoords;
     sofa::type::vector<sofa::type::Vec3>         m_vertexNormals;
     sofa::type::vector<sofa::type::Vec3>         m_smoothForces; ///< EMA-filtered force directions used for Jacobian
+    Real                                         m_meanEdgeLength {1.0}; ///< cached mean edge length (mm) for step-size conversion
 
     sofa::Data<bool>                             d_showForce;
     sofa::Data<Real>                             d_visuScale;
