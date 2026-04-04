@@ -85,6 +85,7 @@ protected:
     sofa::Data<Real>                             d_ridgeSliding; 
     sofa::Data<Real>                             d_jacobianScaleFactor;
     sofa::Data<Real>                             d_dirMomentum; ///< EMA momentum for sliding Jacobian direction (0=off, ~0.7=smooth)
+    sofa::Data<Real>                             d_slideMomentum; ///< EMA momentum for QP sliding output (0=off, ~0.5-0.8=smooth). Filters noisy slide signals so only consistent directions accumulate.
 
     // Internal State
     sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_currentForces;
@@ -93,6 +94,8 @@ protected:
     sofa::type::vector<sofa::type::Vec3>         m_activeLocalCoords;
     sofa::type::vector<sofa::type::Vec3>         m_vertexNormals;
     sofa::type::vector<sofa::type::Vec3>         m_smoothForces; ///< EMA-filtered force directions used for Jacobian
+    sofa::type::vector<Real>                     m_slideMomentumB; ///< Per-point EMA state for dwB
+    sofa::type::vector<Real>                     m_slideMomentumC; ///< Per-point EMA state for dwC
     Real                                         m_meanEdgeLength {1.0}; ///< cached mean edge length (mm) for step-size conversion
 
     sofa::Data<bool>                             d_showForce;

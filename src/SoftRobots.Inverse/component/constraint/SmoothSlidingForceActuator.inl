@@ -33,6 +33,7 @@ SmoothSlidingForceActuator<DataTypes>::SmoothSlidingForceActuator(MechanicalStat
     , d_ridgeSliding(initData(&d_ridgeSliding, Real(1e-12), "ridgeSliding", "Ridge for sliding variable."))
     , d_jacobianScaleFactor(initData(&d_jacobianScaleFactor, Real(1.0), "jacobianScaleFactor", "Factor to scale constraint Jacobian rows."))
     , d_dirMomentum(initData(&d_dirMomentum, Real(0.0), "dirMomentum", "EMA momentum for the force direction used in the sliding Jacobian (0=off, ~0.7=smooth)."))
+    , d_slideMomentum(initData(&d_slideMomentum, Real(0.0), "slideMomentum", "EMA momentum for QP sliding output (0=off, ~0.5-0.8=smooth). Filters noisy dwB/dwC so only consistent slide directions accumulate."))
     , d_currentForces(initData(&d_currentForces, "currentForces", "Current forces applied"))
     , d_currentLocation(initData(&d_currentLocation, "currentLocation", "Current force locations in world coordinates"))
     , d_showForce(initData(&d_showForce, false, "showForce", "Visualize forces"))
@@ -119,6 +120,10 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
 
     // Initialise smooth force directions (used for Jacobian) to same value
     this->m_smoothForces = currentForces;
+
+    // Initialise sliding momentum accumulators to zero
+    this->m_slideMomentumB.assign(nbPoints, Real(0));
+    this->m_slideMomentumC.assign(nbPoints, Real(0));
 
     // Warm-start: seed lambdaInit from initForce so the QP starts near the solution
     this->m_hasLambdaInit = true;
@@ -338,10 +343,10 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
 
     for(unsigned int i=0; i<nbPoints; i++) {
         Real factor = this->d_jacobianScaleFactor.getValue();
-        Real Fx = lambda[i*5 + 0] * factor; 
-        Real Fy = lambda[i*5 + 1] * factor; 
+        Real Fx = lambda[i*5 + 0] * factor;
+        Real Fy = lambda[i*5 + 1] * factor;
         Real Fz = lambda[i*5 + 2] * factor;
-        Real dwB = lambda[i*5 + 3] * factor; 
+        Real dwB = lambda[i*5 + 3] * factor;
         Real dwC = lambda[i*5 + 4] * factor;
         if (std::isnan(Fx + Fy + Fz + dwB + dwC)) continue;
 
@@ -363,6 +368,16 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
         this->m_lambdaInit[i*5 + 3] = 0.0;
         this->m_lambdaInit[i*5 + 4] = 0.0;
 
+        // Sliding momentum: EMA of QP slide outputs.
+        // Consistent signals accumulate; noisy signals cancel out.
+        Real slideMom = this->d_slideMomentum.getValue();
+        if (slideMom > 0.0) {
+            m_slideMomentumB[i] = slideMom * m_slideMomentumB[i] + (1.0 - slideMom) * dwB;
+            m_slideMomentumC[i] = slideMom * m_slideMomentumC[i] + (1.0 - slideMom) * dwC;
+            dwB = m_slideMomentumB[i];
+            dwC = m_slideMomentumC[i];
+        }
+
         // Apply damping
         dwB *= damping;
         dwC *= damping;
@@ -382,8 +397,14 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
         Real wB = this->m_activeLocalCoords[i][0];
         Real wC = this->m_activeLocalCoords[i][1];
         Real wA = 1.0 - wB - wC;
-        if (wA < 0 || wB < 0 || wC < 0)
+        if (wA < 0 || wB < 0 || wC < 0) {
             this->projectToMesh(this->m_activeTriangles[i], this->m_activeLocalCoords[i]);
+            // Reset sliding momentum — barycentric frame changed
+            if (slideMom > 0.0) {
+                m_slideMomentumB[i] = 0.0;
+                m_slideMomentumC[i] = 0.0;
+            }
+        }
     }
     this->d_triangleIndices.setValue(this->m_activeTriangles);
     this->d_localCoords.setValue(this->m_activeLocalCoords);
