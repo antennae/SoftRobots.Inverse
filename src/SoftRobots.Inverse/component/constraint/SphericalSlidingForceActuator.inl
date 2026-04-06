@@ -607,22 +607,22 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
                                    da_dt, db_dt, da_dp, db_dp);
             Vec3 sF = (m_smoothForces.size() > i) ? m_smoothForces[i] : Vec3(0,0,0);
             Real sFMag = sF.norm();
-            std::cout << "[SPAR step=" << s_storeCount << " c=" << i << "] "
-                      << "tri=" << m_currentTriSpar[i]
-                      << " theta=" << m_currentTheta[i] << " phi=" << m_currentPhi[i]
-                      << " alpha=" << m_currentAlpha[i] << " beta=" << m_currentBeta[i]
-                      << "\n  rawJac: da_dt=" << da_dt << " db_dt=" << db_dt
-                      << " da_dp=" << da_dp << " db_dp=" << db_dp
-                      << "\n  rowNorm: theta=" << rnT << " phi=" << rnP
-                      << " factor=" << factor
-                      << "\n  lambda_norm: F=(" << lambda[i*5+0] << "," << lambda[i*5+1] << "," << lambda[i*5+2]
-                      << ") slide=(" << lambda[i*5+3] << "," << lambda[i*5+4] << ")"
-                      << "\n  physical: F=(" << Fx << "," << Fy << "," << Fz
-                      << ") dTheta=" << dTheta << " dPhi=" << dPhi
-                      << "\n  smoothF=(" << sF[0] << "," << sF[1] << "," << sF[2]
-                      << ") |smoothF|=" << sFMag
-                      << "\n  pos=" << sphericalToMesh(m_currentTriSpar[i], m_currentAlpha[i], m_currentBeta[i], pos.ref())
-                      << std::endl;
+            // std::cout << "[SPAR step=" << s_storeCount << " c=" << i << "] "
+            //           << "tri=" << m_currentTriSpar[i]
+            //           << " theta=" << m_currentTheta[i] << " phi=" << m_currentPhi[i]
+            //           << " alpha=" << m_currentAlpha[i] << " beta=" << m_currentBeta[i]
+            //           << "\n  rawJac: da_dt=" << da_dt << " db_dt=" << db_dt
+            //           << " da_dp=" << da_dp << " db_dp=" << db_dp
+            //           << "\n  rowNorm: theta=" << rnT << " phi=" << rnP
+            //           << " factor=" << factor
+            //           << "\n  lambda_norm: F=(" << lambda[i*5+0] << "," << lambda[i*5+1] << "," << lambda[i*5+2]
+            //           << ") slide=(" << lambda[i*5+3] << "," << lambda[i*5+4] << ")"
+            //           << "\n  physical: F=(" << Fx << "," << Fy << "," << Fz
+            //           << ") dTheta=" << dTheta << " dPhi=" << dPhi
+            //           << "\n  smoothF=(" << sF[0] << "," << sF[1] << "," << sF[2]
+            //           << ") |smoothF|=" << sFMag
+            //           << "\n  pos=" << sphericalToMesh(m_currentTriSpar[i], m_currentAlpha[i], m_currentBeta[i], pos.ref())
+            //           << std::endl;
         }
 
         if (std::isnan(Fx + Fy + Fz + dTheta + dPhi)) continue;
