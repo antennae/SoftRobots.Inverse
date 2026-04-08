@@ -35,6 +35,7 @@
 #include <SoftRobots.Inverse/component/constraint/ForceLocalizationActuator.h> // Added to access getSparsity()
 #include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h> // Added
 #include <SoftRobots.Inverse/component/constraint/SmoothSlidingForceActuator.h>
+#include <SoftRobots.Inverse/component/constraint/SphericalSlidingForceActuator.h>
 
 #include <sofa/helper/AdvancedTimer.h>
 #include <sofa/component/collision/response/contact/CollisionResponse.h>
@@ -48,6 +49,7 @@ using softrobots::behavior::SoftRobotsBaseConstraint;
 using softrobotsinverse::constraint::ForceLocalizationActuator; // Added
 using softrobotsinverse::constraint::SlidingForceActuator; // Added
 using softrobotsinverse::constraint::SmoothSlidingForceActuator; // Added
+using softrobotsinverse::constraint::SphericalSlidingForceActuator;
 using sofa::defaulttype::Vec3Types; // Added
 using sofa::defaulttype::Rigid3Types; // Added
 
@@ -279,6 +281,24 @@ void QPInverseProblemImpl::buildQPMatrices()
                     if (sfa->hasEpsilonForce() && sfa->hasRidgeForce()) {
                         currentEpsilon = sfa->getEpsilonForce();
                         currentRidge = sfa->getRidgeForce(); // Use ridge for force regularization
+                    }
+                }
+            }
+
+            if (auto sfa = dynamic_cast<SphericalSlidingForceActuator<Vec3Types>*>(ac)) {
+
+                unsigned int lineIdx = actuatorsNbLines; // 0-based index
+                unsigned int mod5 = lineIdx % 5;
+                if (mod5 >= 3) { // 3 or 4 -> dTheta or dPhi
+                    if (sfa->hasEpsilonSliding() && sfa->hasRidgeSliding()) {
+                        currentEpsilon = sfa->getEpsilonSliding();
+                        currentRidge = sfa->getRidgeSliding();
+                    }
+                }
+                else{
+                    if (sfa->hasEpsilonForce() && sfa->hasRidgeForce()) {
+                        currentEpsilon = sfa->getEpsilonForce();
+                        currentRidge = sfa->getRidgeForce();
                     }
                 }
             }
