@@ -89,6 +89,9 @@ protected:
     sofa::Data<Real>                             d_jacobianScaleFactor;
     sofa::Data<Real>                             d_dirMomentum;     ///< EMA momentum for force direction
     sofa::Data<Real>                             d_slideMomentum;   ///< EMA momentum for QP sliding output
+    sofa::Data<Real>                             d_annealRate;      ///< Annealing rate: damping ramps from d_stepDamping to 1.0 over steps. 0=off.
+    sofa::Data<unsigned int>                     d_stagnationWindow;///< Steps of small sliding before perturbation kick. 0=off.
+    sofa::Data<Real>                             d_perturbRadius;   ///< Perturbation magnitude (radians) when stagnation detected
 
     // Outputs
     sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_currentForces;
@@ -117,6 +120,8 @@ protected:
     sofa::type::vector<Real>                     m_slideMomentumPhi;
     sofa::type::vector<Real>                     m_rowNormTheta;     ///< Jacobian row norm for dTheta (for normalization)
     sofa::type::vector<Real>                     m_rowNormPhi;       ///< Jacobian row norm for dPhi
+    unsigned int                                 m_stepCount {0};    ///< Step counter for annealing
+    sofa::type::vector<unsigned int>             m_stagnationCount;  ///< Per-contact stagnation counter
 
     sofa::Size                                   m_dim;
 
