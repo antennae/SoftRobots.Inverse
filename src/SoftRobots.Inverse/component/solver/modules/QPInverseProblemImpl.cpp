@@ -36,6 +36,7 @@
 #include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h> // Added
 #include <SoftRobots.Inverse/component/constraint/SmoothSlidingForceActuator.h>
 #include <SoftRobots.Inverse/component/constraint/SphericalSlidingForceActuator.h>
+#include <SoftRobots.Inverse/component/constraint/AreaContactSlidingForceActuator.h>
 
 #include <sofa/helper/AdvancedTimer.h>
 #include <sofa/component/collision/response/contact/CollisionResponse.h>
@@ -50,6 +51,7 @@ using softrobotsinverse::constraint::ForceLocalizationActuator; // Added
 using softrobotsinverse::constraint::SlidingForceActuator; // Added
 using softrobotsinverse::constraint::SmoothSlidingForceActuator; // Added
 using softrobotsinverse::constraint::SphericalSlidingForceActuator;
+using softrobotsinverse::constraint::AreaContactSlidingForceActuator;
 using sofa::defaulttype::Vec3Types; // Added
 using sofa::defaulttype::Rigid3Types; // Added
 
@@ -299,6 +301,31 @@ void QPInverseProblemImpl::buildQPMatrices()
                     if (sfa->hasEpsilonForce() && sfa->hasRidgeForce()) {
                         currentEpsilon = sfa->getEpsilonForce();
                         currentRidge = sfa->getRidgeForce();
+                    }
+                }
+            }
+
+            if (auto acfa = dynamic_cast<AreaContactSlidingForceActuator<Vec3Types>*>(ac)) {
+                unsigned int lineIdx = actuatorsNbLines;
+                unsigned int mod6 = lineIdx % 6;
+                if (mod6 >= 3 && mod6 <= 4) { // 3 or 4 -> dTheta or dPhi
+                    if (acfa->hasEpsilonSliding() && acfa->hasRidgeSliding()) {
+                        currentEpsilon = acfa->getEpsilonSliding();
+                        currentRidge = acfa->getRidgeSliding();
+                    }
+                }
+                else if (mod6 == 5) { // 5 -> dR
+                    if (acfa->hasRidgeRadius()) {
+                        currentRidge = acfa->getRidgeRadius();
+                    }
+                    if (acfa->hasEpsilonSliding()) {
+                        currentEpsilon = acfa->getEpsilonSliding();
+                    }
+                }
+                else { // 0, 1, 2 -> pressure
+                    if (acfa->hasEpsilonForce() && acfa->hasRidgeForce()) {
+                        currentEpsilon = acfa->getEpsilonForce();
+                        currentRidge = acfa->getRidgeForce();
                     }
                 }
             }

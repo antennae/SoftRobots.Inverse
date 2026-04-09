@@ -61,6 +61,8 @@ set(HEADER_FILES
     ${SRC_DIR}/component/constraint/SmoothSlidingForceActuator.inl
     ${SRC_DIR}/component/constraint/SphericalSlidingForceActuator.h
     ${SRC_DIR}/component/constraint/SphericalSlidingForceActuator.inl
+    ${SRC_DIR}/component/constraint/AreaContactSlidingForceActuator.h
+    ${SRC_DIR}/component/constraint/AreaContactSlidingForceActuator.inl
 
     # SENSOR
     ${SRC_DIR}/component/behavior/Sensor.h
@@ -123,6 +125,7 @@ set(SOURCE_FILES
     ${SRC_DIR}/component/constraint/SlidingForceActuator.cpp
     ${SRC_DIR}/component/constraint/SmoothSlidingForceActuator.cpp
     ${SRC_DIR}/component/constraint/SphericalSlidingForceActuator.cpp
+    ${SRC_DIR}/component/constraint/AreaContactSlidingForceActuator.cpp
 
     # SENSOR
     ${SRC_DIR}/component/behavior/Sensor.cpp
