@@ -94,6 +94,7 @@ protected:
     sofa::Data<Real>                             d_ridgeForce;
     sofa::Data<Real>                             d_ridgeSliding;
     sofa::Data<Real>                             d_ridgeRadius;     ///< Ridge for radius DOF
+    sofa::Data<Real>                             d_epsilonRadius;   ///< Regularization for radius constraint
     sofa::Data<Real>                             d_jacobianScaleFactor;
     sofa::Data<Real>                             d_dirMomentum;
     sofa::Data<Real>                             d_slideMomentum;
@@ -212,6 +213,9 @@ public:
 
     Real getRidgeRadius() const { return d_ridgeRadius.getValue(); }
     bool hasRidgeRadius() const { return d_ridgeRadius.isSet(); }
+
+    Real getEpsilonRadius() const { return d_epsilonRadius.getValue(); }
+    bool hasEpsilonRadius() const { return d_epsilonRadius.isSet(); }
 };
 
 #if !defined(SOFTROBOTS_INVERSE_AREACONTACTSLIDINGFORCEACTUATOR_CPP)

@@ -51,6 +51,8 @@ AreaContactSlidingForceActuator<DataTypes>::AreaContactSlidingForceActuator(Mech
                               "Ridge for sliding variable"))
     , d_ridgeRadius(initData(&d_ridgeRadius, Real(1e-12), "ridgeRadius",
                              "Ridge for radius variable"))
+    , d_epsilonRadius(initData(&d_epsilonRadius, Real(1e-3), "epsilonRadius",
+                               "Regularization for radius constraint"))
     , d_jacobianScaleFactor(initData(&d_jacobianScaleFactor, Real(1.0),
                                      "jacobianScaleFactor",
                                      "Factor to scale constraint Jacobian rows"))
@@ -381,7 +383,10 @@ void AreaContactSlidingForceActuator<DataTypes>::recomputePatches(const VecCoord
             rowNormSq += g*g * (wA*wA + wB*wB + wC*wC);
         }
         Real rn = std::sqrt(rowNormSq);
-        m_rowNormR[i] = (rn > Real(1e-12)) ? rn : Real(1.0);
+        // Floor at 1e-3 to prevent ill-conditioned QP when sigmoid
+        // gradient is near-zero (e.g. radius at min/max or all
+        // triangles fully inside/outside the patch).
+        m_rowNormR[i] = (rn > Real(1e-3)) ? rn : Real(1e-3);
     }
     m_patchDirty.store(false, std::memory_order_release);
 }
@@ -698,6 +703,9 @@ void AreaContactSlidingForceActuator<DataTypes>::buildConstraintMatrix(
 
         // ── Row 5: Radius (dR) ──
         // Uses pre-computed m_rowNormR from recomputePatches.
+        // When the sigmoid gradient is degenerate (all triangles fully
+        // inside/outside), write a zero row — the QP ridge/epsilon on
+        // this row will keep it well-conditioned.
         {
             Real invNorm = Real(1.0) / m_rowNormR[i];
 

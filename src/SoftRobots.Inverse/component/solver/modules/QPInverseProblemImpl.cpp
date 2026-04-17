@@ -318,7 +318,9 @@ void QPInverseProblemImpl::buildQPMatrices()
                     if (acfa->hasRidgeRadius()) {
                         currentRidge = acfa->getRidgeRadius();
                     }
-                    if (acfa->hasEpsilonSliding()) {
+                    if (acfa->hasEpsilonRadius()) {
+                        currentEpsilon = acfa->getEpsilonRadius();
+                    } else if (acfa->hasEpsilonSliding()) {
                         currentEpsilon = acfa->getEpsilonSliding();
                     }
                 }
