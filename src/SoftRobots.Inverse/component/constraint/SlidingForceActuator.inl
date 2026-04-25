@@ -440,7 +440,7 @@ void SlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, sofa::
     
     // 2. Find closest triangle
     Real minDist = std::numeric_limits<Real>::max();
-    int bestTri = -1;
+    unsigned int bestTri = triangles.size();  // sentinel: any value >= size means "not found"
     sofa::type::Vec3 bestLocal;
     
     for(unsigned int i=0; i<triangles.size(); i++) {
@@ -475,7 +475,7 @@ void SlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, sofa::
         }
     }
     
-    if (bestTri != -1) {
+    if (bestTri < triangles.size()) {
         triIdx = bestTri;
         local = bestLocal;
     }
