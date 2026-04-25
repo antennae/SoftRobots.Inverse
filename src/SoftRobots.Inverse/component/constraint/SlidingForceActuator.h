@@ -103,6 +103,11 @@ protected:
 
     sofa::Size                                   m_dim;
 
+    // Each active point contributes 5 constraint rows:
+    //   indices [0, 1, 2] = force components (x, y, z)
+    //   indices [3, 4]    = sliding tangent step (dU, dV) in triangle frame
+    static constexpr unsigned int s_rowsPerPoint = 5;
+
     // Topology link
     sofa::SingleLink<SlidingForceActuator<DataTypes>, sofa::core::topology::BaseMeshTopology, sofa::core::objectmodel::BaseLink::FLAG_STRONGLINK> d_topology;
 

@@ -78,7 +78,7 @@ template<class DataTypes>
 void SlidingForceActuator<DataTypes>::initData()
 {
     unsigned int nbPoints = d_triangleIndices.getValue().size();
-    m_dim = nbPoints * 5;
+    m_dim = nbPoints * s_rowsPerPoint;
     m_nbLines = m_dim;
 
     m_activeTriangles = d_triangleIndices.getValue();
@@ -97,7 +97,7 @@ void SlidingForceActuator<DataTypes>::initData()
                  if(triIdx < triangles.size()) {
                      const Triangle& t = triangles[triIdx];
                      Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-                     Coord P = (A+B+C)/3.0;
+                     Coord P = (A+B+C)/Real(3);  // triangle centroid
                      Deriv v1 = B-A;
                      sofa::type::Vec3 e1 = v1; e1.normalize();
                      m_activeLocalCoords[i][0] = (P-A)*e1;
@@ -117,7 +117,7 @@ void SlidingForceActuator<DataTypes>::initData()
         m_epsilon = d_epsilon.getValue();
     }
 
-    unsigned int dim = nbPoints * 5;
+    unsigned int dim = nbPoints * s_rowsPerPoint;
     m_lambdaInit.assign(dim, 0.0);
     m_lambdaMax.resize(dim);
     m_lambdaMin.resize(dim);
@@ -138,11 +138,11 @@ void SlidingForceActuator<DataTypes>::initData()
             sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
             n.normalize();
 
-            m_lambdaInit[i*5 + 0] = n[0] * f0.norm(); 
-            m_lambdaInit[i*5 + 1] = n[1] * f0.norm();
-            m_lambdaInit[i*5 + 2] = n[2] * f0.norm(); 
-            m_lambdaInit[i*5 + 3] = 0.0;
-            m_lambdaInit[i*5 + 4] = 0.0; 
+            m_lambdaInit[i*s_rowsPerPoint + 0] = n[0] * f0.norm(); 
+            m_lambdaInit[i*s_rowsPerPoint + 1] = n[1] * f0.norm();
+            m_lambdaInit[i*s_rowsPerPoint + 2] = n[2] * f0.norm(); 
+            m_lambdaInit[i*s_rowsPerPoint + 3] = 0.0;
+            m_lambdaInit[i*s_rowsPerPoint + 4] = 0.0; 
         }
     }
 
@@ -253,31 +253,31 @@ void SlidingForceActuator<DataTypes>::updateLimit()
         // Force bounds (Indices 0, 1, 2)
         if (maxForceStep > 0.0)
         {
-            m_lambdaMin[i*5 + 0] = std::max(minF, currentForce[0] - maxForceStep);
-            m_lambdaMax[i*5 + 0] = std::min(maxF, currentForce[0] + maxForceStep);
-            m_lambdaMin[i*5 + 1] = std::max(minF, currentForce[1] - maxForceStep);
-            m_lambdaMax[i*5 + 1] = std::min(maxF, currentForce[1] + maxForceStep);
-            m_lambdaMin[i*5 + 2] = std::max(minF, currentForce[2] - maxForceStep);
-            m_lambdaMax[i*5 + 2] = std::min(maxF, currentForce[2] + maxForceStep);
+            m_lambdaMin[i*s_rowsPerPoint + 0] = std::max(minF, currentForce[0] - maxForceStep);
+            m_lambdaMax[i*s_rowsPerPoint + 0] = std::min(maxF, currentForce[0] + maxForceStep);
+            m_lambdaMin[i*s_rowsPerPoint + 1] = std::max(minF, currentForce[1] - maxForceStep);
+            m_lambdaMax[i*s_rowsPerPoint + 1] = std::min(maxF, currentForce[1] + maxForceStep);
+            m_lambdaMin[i*s_rowsPerPoint + 2] = std::max(minF, currentForce[2] - maxForceStep);
+            m_lambdaMax[i*s_rowsPerPoint + 2] = std::min(maxF, currentForce[2] + maxForceStep);
         }
         else
         {
-            m_lambdaMin[i*5 + 0] = minF;
-            m_lambdaMax[i*5 + 0] = maxF;
-            m_lambdaMin[i*5 + 1] = minF;
-            m_lambdaMax[i*5 + 1] = maxF;
-            m_lambdaMin[i*5 + 2] = minF;
-            m_lambdaMax[i*5 + 2] = maxF;
+            m_lambdaMin[i*s_rowsPerPoint + 0] = minF;
+            m_lambdaMax[i*s_rowsPerPoint + 0] = maxF;
+            m_lambdaMin[i*s_rowsPerPoint + 1] = minF;
+            m_lambdaMax[i*s_rowsPerPoint + 1] = maxF;
+            m_lambdaMin[i*s_rowsPerPoint + 2] = minF;
+            m_lambdaMax[i*s_rowsPerPoint + 2] = maxF;
         }
         
         // Sliding bounds (Indices 3, 4) - SCALED Bounds for Cartesian dU, dV
         Real scaledStep = step  ; //* jacobianScale;
         
-        m_lambdaMin[i*5 + 3] = -scaledStep;
-        m_lambdaMax[i*5 + 3] = scaledStep;
+        m_lambdaMin[i*s_rowsPerPoint + 3] = -scaledStep;
+        m_lambdaMax[i*s_rowsPerPoint + 3] = scaledStep;
         
-        m_lambdaMin[i*5 + 4] = -scaledStep;
-        m_lambdaMax[i*5 + 4] = scaledStep;
+        m_lambdaMin[i*s_rowsPerPoint + 4] = -scaledStep;
+        m_lambdaMax[i*s_rowsPerPoint + 4] = scaledStep;
     }
 }
 
@@ -408,7 +408,7 @@ void SlidingForceActuator<DataTypes>::getConstraintViolation(const ConstraintPar
     SOFA_UNUSED(Jdx);
     // Target is zero (minimization of variables)
     // No violation
-    unsigned int dim = m_activeTriangles.size() * 5;
+    unsigned int dim = m_activeTriangles.size() * s_rowsPerPoint;
     const auto& constraintId = sofa::helper::getReadAccessor(d_constraintIndex);
     for(unsigned int i=0; i<dim; i++)
         resV->set(constraintId + i, 0.);
@@ -506,11 +506,11 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
     
     for(unsigned int i=0; i<n_triangles; i++) {
         Real factor = d_jacobianScaleFactor.getValue();
-        Real Fx = lambda[ i*5 + 0] * factor;
-        Real Fy = lambda[ i*5 + 1] * factor;
-        Real Fz = lambda[ i*5 + 2] * factor;
-        Real dU = lambda[ i*5 + 3] * factor;
-        Real dV = lambda[ i*5 + 4] * factor;
+        Real Fx = lambda[ i*s_rowsPerPoint + 0] * factor;
+        Real Fy = lambda[ i*s_rowsPerPoint + 1] * factor;
+        Real Fz = lambda[ i*s_rowsPerPoint + 2] * factor;
+        Real dU = lambda[ i*s_rowsPerPoint + 3] * factor;
+        Real dV = lambda[ i*s_rowsPerPoint + 4] * factor;
 
         unsigned int triangleIdx = m_activeTriangles[i];
         const Triangle& tri = triangles[triangleIdx];
