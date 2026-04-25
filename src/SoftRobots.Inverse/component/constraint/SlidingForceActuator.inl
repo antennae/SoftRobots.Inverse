@@ -2,6 +2,7 @@
 
 #include <unordered_set>
 #include <iostream>
+#include <limits>
 
 #include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h>
 #include <sofa/core/visual/VisualParams.h>
@@ -166,7 +167,7 @@ void SlidingForceActuator<DataTypes>::initData()
         ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
         sofa::type::Vec3 f0 = d_initForce.getValue();
         Real fMag = f0.norm();
-        if (fMag == 0.0) fMag = 1e-3; // Fallback to avoid singular Jacobian
+        if (fMag == 0.0) fMag = s_fallbackForceMag; // Fallback to avoid singular Jacobian
 
         for(unsigned int i=0; i<nbPoints; i++) {
              unsigned int triIdx = m_activeTriangles[i];
@@ -216,8 +217,8 @@ void SlidingForceActuator<DataTypes>::initData()
 template<class DataTypes>
 void SlidingForceActuator<DataTypes>::updateLimit()
 {
-    Real maxF = d_maxForce.isSet() ? d_maxForce.getValue() : 1e20;
-    Real minF = d_minForce.isSet() ? d_minForce.getValue() : -1e20;
+    Real maxF = d_maxForce.isSet() ? d_maxForce.getValue() : std::numeric_limits<Real>::max();
+    Real minF = d_minForce.isSet() ? d_minForce.getValue() : std::numeric_limits<Real>::lowest();
     Real step = d_maxStepSize.getValue();
     Real maxForceStep = d_maxForceStep.getValue();
     
@@ -227,7 +228,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
         // Compute Scaling Factor
         sofa::type::Vec3 currentForce = d_currentForces.getValue()[i];
         
-        if (currentForce.norm2() < 1e-12 && m_state && d_topology.get()) {
+        if (currentForce.norm2() < s_squaredEpsilon && m_state && d_topology.get()) {
              // Virtual Force Logic
              ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
              unsigned int triIdx = m_activeTriangles[i];
@@ -239,7 +240,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
                  sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
                  n.normalize();
                  Real fScale = 1.0;
-                 if (d_initForce.isSet() && d_initForce.getValue().norm () > 1e-9){
+                 if (d_initForce.isSet() && d_initForce.getValue().norm () > s_normEpsilon){
                     currentForce = d_initForce.getValue();
                  } else {
                     currentForce = n * fScale;
@@ -248,7 +249,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
              }
         }                                                                                                                
         Real jacobianScale = currentForce.norm();                                                                 
-        if (jacobianScale < 1e-9) jacobianScale = 1.0;   
+        if (jacobianScale < s_normEpsilon) jacobianScale = 1.0;   
 
         // Force bounds (Indices 0, 1, 2)
         if (maxForceStep > 0.0)
@@ -315,7 +316,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         Deriv v2 = C - A;
         sofa::type::Vec3 nBasis = sofa::type::cross(v1, v2);
         Real area2 = nBasis.norm();
-        if (area2 > 1e-12) nBasis /= area2;
+        if (area2 > s_squaredEpsilon) nBasis /= area2;
 
         sofa::type::Vec3 e1 = v1;
         e1.normalize();
@@ -329,8 +330,8 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         Real v1x = v1 * e1;
         Real v2x = v2 * e1;
         Real v2y = v2 * e2;
-        if (std::abs(v1x) < 1e-12) v1x = 1.0;
-        if (std::abs(v2y) < 1e-12) v2y = 1.0;
+        if (std::abs(v1x) < s_squaredEpsilon) v1x = 1.0;
+        if (std::abs(v2y) < s_squaredEpsilon) v2y = 1.0;
         Real det = v1x * v2y;
 
         Real weightC = local[1] / v2y;
@@ -342,15 +343,15 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         sofa::type::Vec3 gradientForce = currentForce;
         
         // Handle vanishing gradients when force is zero.
-        if (gradientForce.norm2() < 1e-12) {
+        if (gradientForce.norm2() < s_squaredEpsilon) {
             Real scale = 1.0;
-            if (d_initForce.isSet() && d_initForce.getValue().norm() > 1e-9) scale = d_initForce.getValue().norm();
+            if (d_initForce.isSet() && d_initForce.getValue().norm() > s_normEpsilon) scale = d_initForce.getValue().norm();
             gradientForce = nBasis * scale;
         }
         
         // SCALING: Normalize the gradient to avoid ill-conditioning.
         Real jacobianScale = gradientForce.norm();
-        if (jacobianScale < 1e-9) jacobianScale = 1.0;
+        if (jacobianScale < s_normEpsilon) jacobianScale = 1.0;
         sofa::type::Vec3 scaledGradient = gradientForce / jacobianScale;
 
 
@@ -438,7 +439,7 @@ void SlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, sofa::
     Coord candidatePos = A0 + e1_0 * local[0] + e2_0 * local[1];
     
     // 2. Find closest triangle
-    Real minDist = 1e99;
+    Real minDist = std::numeric_limits<Real>::max();
     int bestTri = -1;
     sofa::type::Vec3 bestLocal;
     
@@ -519,7 +520,7 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         sofa::type::Vec3 gradientForce = currentForce;
         
         // Handle vanishing gradients when force is zero.
-        if (gradientForce.norm2() < 1e-12) {
+        if (gradientForce.norm2() < s_squaredEpsilon) {
             const Coord& A = pos[tri[0]];
             const Coord& B = pos[tri[1]];
             const Coord& C = pos[tri[2]];
@@ -527,12 +528,12 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
             n.normalize();
             
             Real scale = 1.0;
-            if (d_initForce.isSet() && d_initForce.getValue().norm() > 1e-9) scale = d_initForce.getValue().norm();
+            if (d_initForce.isSet() && d_initForce.getValue().norm() > s_normEpsilon) scale = d_initForce.getValue().norm();
             
             gradientForce = n * scale;
         }
         Real jacobianScale = gradientForce.norm();
-        if (jacobianScale < 1e-9) jacobianScale = 1.0;
+        if (jacobianScale < s_normEpsilon) jacobianScale = 1.0;
         
         // DECODING: Recover physical step (Cartesian distance in tangent plane)
         // dU /= jacobianScale;
@@ -577,15 +578,15 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         Deriv v2 = C - A;
         sofa::type::Vec3 nBasis = sofa::type::cross(v1, v2);
         Real area2 = nBasis.norm();
-        if (area2 > 1e-12) nBasis /= area2;
+        if (area2 > s_squaredEpsilon) nBasis /= area2;
         sofa::type::Vec3 e1 = v1; e1.normalize();
         sofa::type::Vec3 e2 = sofa::type::cross(nBasis, e1);
 
         Real v1x = v1 * e1;
         Real v2x = v2 * e1;
         Real v2y = v2 * e2;
-        if (std::abs(v1x) < 1e-12) v1x = 1.0;
-        if (std::abs(v2y) < 1e-12) v2y = 1.0;
+        if (std::abs(v1x) < s_squaredEpsilon) v1x = 1.0;
+        if (std::abs(v2y) < s_squaredEpsilon) v2y = 1.0;
 
         Real weightC = m_activeLocalCoords[i][1] / v2y;
         Real weightB = (m_activeLocalCoords[i][0] - weightC * v2x) / v1x;
@@ -671,7 +672,7 @@ void SlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
         Coord P = A + e1 * local[0] + e2 * local[1];
         
         sofa::type::Vec3 f = d_currentForces.getValue()[i];
-        if (f.norm2() < 1e-12) continue;
+        if (f.norm2() < s_squaredEpsilon) continue;
         sofa::type::Vec3 dir = f/f.norm();
         
         vparams->drawTool()->drawArrow(P - dir * log(f.norm()+1)*d_visuScale.getValue(), P, 
