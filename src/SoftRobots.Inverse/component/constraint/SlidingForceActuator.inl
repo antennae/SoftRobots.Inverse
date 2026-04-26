@@ -78,7 +78,7 @@ void SlidingForceActuator<DataTypes>::reinit()
 template<class DataTypes>
 void SlidingForceActuator<DataTypes>::initData()
 {
-    unsigned int nbPoints = d_triangleIndices.getValue().size();
+    unsigned int const nbPoints = d_triangleIndices.getValue().size();
     m_dim = nbPoints * s_rowsPerPoint;
     m_nbLines = m_dim;
 
@@ -92,18 +92,18 @@ void SlidingForceActuator<DataTypes>::initData()
         m_activeLocalCoords.assign(nbPoints, sofa::type::Vec3(0,0,0));
         const auto& triangles = (d_topology.get()) ? d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
         if (m_state && !triangles.empty()) {
-             ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+             ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
              for(unsigned int i=0; i<nbPoints; i++) {
-                 unsigned int triIdx = m_activeTriangles[i];
+                 unsigned int const triIdx = m_activeTriangles[i];
                  if(triIdx < triangles.size()) {
                      const Triangle& t = triangles[triIdx];
-                     Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-                     Coord P = (A+B+C)/Real(3);  // triangle centroid
-                     Deriv v1 = B-A;
+                     Coord const A = pos[t[0]]; Coord const B = pos[t[1]]; Coord const C = pos[t[2]];
+                     Coord const P = (A+B+C)/Real(3);  // triangle centroid
+                     Deriv const v1 = B-A;
                      sofa::type::Vec3 e1 = v1; e1.normalize();
                      m_activeLocalCoords[i][0] = (P-A)*e1;
                      sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-                     sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
+                     sofa::type::Vec3 const e2 = sofa::type::cross(n, e1);
                      m_activeLocalCoords[i][1] = (P-A)*e2;
                  }
              }
@@ -118,7 +118,7 @@ void SlidingForceActuator<DataTypes>::initData()
         m_epsilon = d_epsilon.getValue();
     }
 
-    unsigned int dim = nbPoints * s_rowsPerPoint;
+    unsigned int const dim = nbPoints * s_rowsPerPoint;
     m_lambdaInit.assign(dim, 0.0);
     m_lambdaMax.resize(dim);
     m_lambdaMin.resize(dim);
@@ -126,11 +126,11 @@ void SlidingForceActuator<DataTypes>::initData()
     if(d_initForce.isSet())
     {
         m_hasLambdaInit = true;
-        sofa::type::Vec3 f0 = d_initForce.getValue();
+        sofa::type::Vec3 const f0 = d_initForce.getValue();
         const auto& triangles = (d_topology.get()) ? d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
-        ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+        ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
         for (unsigned int i=0; i<nbPoints; i++) {
-            unsigned int triIdx = m_activeTriangles[i];
+            unsigned int const triIdx = m_activeTriangles[i];
             if(triIdx >= triangles.size()) continue;
             const Triangle& tri = triangles[triIdx];
             const Coord& A = pos[tri[0]];
@@ -164,13 +164,13 @@ void SlidingForceActuator<DataTypes>::initData()
     currentForces.resize(nbPoints);
     if (d_topology.get() && m_state) {
         const auto& triangles = d_topology.get()->getTriangles();
-        ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
-        sofa::type::Vec3 f0 = d_initForce.getValue();
+        ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
+        sofa::type::Vec3 const f0 = d_initForce.getValue();
         Real fMag = f0.norm();
         if (fMag == 0.0) fMag = s_fallbackForceMag; // Fallback to avoid singular Jacobian
 
         for(unsigned int i=0; i<nbPoints; i++) {
-             unsigned int triIdx = m_activeTriangles[i];
+             unsigned int const triIdx = m_activeTriangles[i];
              if(triIdx < triangles.size()) {
                  const Triangle& t = triangles[triIdx];
                  const Coord& A = pos[t[0]];
@@ -185,7 +185,7 @@ void SlidingForceActuator<DataTypes>::initData()
              }
         }
     } else {
-         sofa::type::Vec3 initF(0,0,0);
+         sofa::type::Vec3 const initF(0,0,0);
          std::fill(currentForces.begin(), currentForces.end(), initF);
     }
     d_currentForces.setValue(currentForces);
@@ -193,18 +193,18 @@ void SlidingForceActuator<DataTypes>::initData()
     // Update current location
     if (m_state && d_topology.get()) {
         const auto& triangles = d_topology.get()->getTriangles();
-        ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+        ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
         sofa::type::vector<sofa::type::Vec3> currentLocations;
         currentLocations.resize(nbPoints);
         for(unsigned int i=0; i<nbPoints; i++) {
-            unsigned int triIdx = m_activeTriangles[i];
+            unsigned int const triIdx = m_activeTriangles[i];
             if(triIdx < triangles.size()) {
                 const Triangle& t = triangles[triIdx];
-                Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-                Deriv v1 = B-A;
+                Coord const A = pos[t[0]]; Coord const B = pos[t[1]]; Coord const C = pos[t[2]];
+                Deriv const v1 = B-A;
                 sofa::type::Vec3 e1 = v1; e1.normalize();
                 sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-                sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
+                sofa::type::Vec3 const e2 = sofa::type::cross(n, e1);
                 currentLocations[i] = A + e1 * m_activeLocalCoords[i][0] + e2 * m_activeLocalCoords[i][1];
             }
         }
@@ -217,10 +217,10 @@ void SlidingForceActuator<DataTypes>::initData()
 template<class DataTypes>
 void SlidingForceActuator<DataTypes>::updateLimit()
 {
-    Real maxF = d_maxForce.isSet() ? d_maxForce.getValue() : std::numeric_limits<Real>::max();
-    Real minF = d_minForce.isSet() ? d_minForce.getValue() : std::numeric_limits<Real>::lowest();
-    Real step = d_maxStepSize.getValue();
-    Real maxForceStep = d_maxForceStep.getValue();
+    Real const maxF = d_maxForce.isSet() ? d_maxForce.getValue() : std::numeric_limits<Real>::max();
+    Real const minF = d_minForce.isSet() ? d_minForce.getValue() : std::numeric_limits<Real>::lowest();
+    Real const step = d_maxStepSize.getValue();
+    Real const maxForceStep = d_maxForceStep.getValue();
     
     const auto& triangles = (d_topology.get()) ? d_topology.get()->getTriangles() : sofa::type::vector<Triangle>();
 
@@ -230,8 +230,8 @@ void SlidingForceActuator<DataTypes>::updateLimit()
         
         if (currentForce.norm2() < s_squaredEpsilon && m_state && d_topology.get()) {
              // Virtual Force Logic
-             ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
-             unsigned int triIdx = m_activeTriangles[i];
+             ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
+             unsigned int const triIdx = m_activeTriangles[i];
              if(triIdx < triangles.size()) {
                  const Triangle& t = triangles[triIdx];
                  const Coord& A = pos[t[0]];
@@ -239,7 +239,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
                  const Coord& C = pos[t[2]];
                  sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
                  n.normalize();
-                 Real fScale = 1.0;
+                 Real const fScale = 1.0;
                  if (d_initForce.isSet() && d_initForce.getValue().norm () > s_normEpsilon){
                     currentForce = d_initForce.getValue();
                  } else {
@@ -272,7 +272,7 @@ void SlidingForceActuator<DataTypes>::updateLimit()
         }
         
         // Sliding bounds (Indices 3, 4) - SCALED Bounds for Cartesian dU, dV
-        Real scaledStep = step  ; //* jacobianScale;
+        Real const scaledStep = step  ; //* jacobianScale;
         
         m_lambdaMin[i*s_rowsPerPoint + 3] = -scaledStep;
         m_lambdaMax[i*s_rowsPerPoint + 3] = scaledStep;
@@ -292,7 +292,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
     SOFA_UNUSED(cParams);
     
     d_constraintIndex.setValue(cIndex);
-    unsigned int startConstraintIndex = cIndex;
+    unsigned int const startConstraintIndex = cIndex;
     
     if (!d_topology.get()) return;
     
@@ -303,7 +303,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
     
     for(unsigned int i=0; i<m_activeTriangles.size(); i++)
     {
-        unsigned int triIdx = m_activeTriangles[i];
+        unsigned int const triIdx = m_activeTriangles[i];
         if (triIdx >= triangles.size()) continue;
 
         const Triangle& tri = triangles[triIdx];
@@ -312,15 +312,15 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         const Coord& A = pos[tri[0]];
         const Coord& B = pos[tri[1]];
         const Coord& C = pos[tri[2]];
-        Deriv v1 = B - A;
-        Deriv v2 = C - A;
+        Deriv const v1 = B - A;
+        Deriv const v2 = C - A;
         sofa::type::Vec3 nBasis = sofa::type::cross(v1, v2);
-        Real area2 = nBasis.norm();
+        Real const area2 = nBasis.norm();
         if (area2 > s_squaredEpsilon) nBasis /= area2;
 
         sofa::type::Vec3 e1 = v1;
         e1.normalize();
-        sofa::type::Vec3 e2 = sofa::type::cross(nBasis, e1);
+        sofa::type::Vec3 const e2 = sofa::type::cross(nBasis, e1);
 
         // Compute weights from Cartesian coords
         // P = A + U*e1 + V*e2
@@ -328,18 +328,18 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // P-A = wB(B-A) + wC(C-A) = wB*v1 + wC*v2
         
         Real v1x = v1 * e1;
-        Real v2x = v2 * e1;
+        Real const v2x = v2 * e1;
         Real v2y = v2 * e2;
         if (std::abs(v1x) < s_squaredEpsilon) v1x = 1.0;
         if (std::abs(v2y) < s_squaredEpsilon) v2y = 1.0;
-        Real det = v1x * v2y;
+        Real const det = v1x * v2y;
 
-        Real weightC = local[1] / v2y;
-        Real weightB = (local[0] - weightC * v2x) / v1x;
-        Real weightA = 1.0 - weightB - weightC;
+        Real const weightC = local[1] / v2y;
+        Real const weightB = (local[0] - weightC * v2x) / v1x;
+        Real const weightA = 1.0 - weightB - weightC;
 
         // Current Force Vector
-        sofa::type::Vec3 currentForce = d_currentForces.getValue()[i];
+        sofa::type::Vec3 const currentForce = d_currentForces.getValue()[i];
         sofa::type::Vec3 gradientForce = currentForce;
         
         // Handle vanishing gradients when force is zero.
@@ -352,11 +352,11 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // SCALING: Normalize the gradient to avoid ill-conditioning.
         Real jacobianScale = gradientForce.norm();
         if (jacobianScale < s_normEpsilon) jacobianScale = 1.0;
-        sofa::type::Vec3 scaledGradient = gradientForce / jacobianScale;
+        sofa::type::Vec3 const scaledGradient = gradientForce / jacobianScale;
 
 
         // Scaling factor for sliding (Surrogate Jacobian effect)
-        Real factor = d_jacobianScaleFactor.getValue();
+        Real const factor = d_jacobianScaleFactor.getValue();
         // --- Rows 0, 1, 2: Force Components (Fx, Fy, Fz) ---
         // Row 0: Fx
         MatrixDerivRowIterator rowFx = matrix.writeLine(cIndex++);
@@ -377,10 +377,10 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         rowFz.addCol(tri[2], factor * Deriv(0, 0, weightC));
         
         // --- Rows 3, 4: Sliding (dU, dV) in Cartesian Tangent Plane ---
-        Real du_dU = 1.0 / v1x;
-        Real du_dV = -v2x / det;
-        Real dv_dU = 0.0;
-        Real dv_dV = 1.0 / v2y;
+        Real const du_dU = 1.0 / v1x;
+        Real const du_dV = -v2x / det;
+        Real const dv_dU = 0.0;
+        Real const dv_dV = 1.0 / v2y;
 
         // Row 3: Sliding U (dU)
         MatrixDerivRowIterator rowSlideU = matrix.writeLine(cIndex++);
@@ -409,7 +409,7 @@ void SlidingForceActuator<DataTypes>::getConstraintViolation(const ConstraintPar
     SOFA_UNUSED(Jdx);
     // Target is zero (minimization of variables)
     // No violation
-    unsigned int dim = m_activeTriangles.size() * s_rowsPerPoint;
+    unsigned int const dim = m_activeTriangles.size() * s_rowsPerPoint;
     const auto& constraintId = sofa::helper::getReadAccessor(d_constraintIndex);
     for(unsigned int i=0; i<dim; i++)
         resV->set(constraintId + i, 0.);
@@ -421,22 +421,22 @@ void SlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, sofa::
     if (!d_topology.get() || !m_state) return;
     
     const auto& triangles = d_topology.get()->getTriangles();
-    ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+    ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
     
     // 1. Reconstruct 3D position from current (possibly illegal) local coords
     if (triIdx >= triangles.size()) return;
     const Triangle& t = triangles[triIdx];
     
-    Coord A0 = pos[t[0]];
-    Coord B0 = pos[t[1]];
-    Coord C0 = pos[t[2]];
+    Coord const A0 = pos[t[0]];
+    Coord const B0 = pos[t[1]];
+    Coord const C0 = pos[t[2]];
     
-    Deriv v1_0 = B0 - A0;
+    Deriv const v1_0 = B0 - A0;
     sofa::type::Vec3 e1_0 = v1_0; e1_0.normalize();
     sofa::type::Vec3 n_0 = sofa::type::cross(B0-A0, C0-A0); n_0.normalize();
-    sofa::type::Vec3 e2_0 = sofa::type::cross(n_0, e1_0);
+    sofa::type::Vec3 const e2_0 = sofa::type::cross(n_0, e1_0);
 
-    Coord candidatePos = A0 + e1_0 * local[0] + e2_0 * local[1];
+    Coord const candidatePos = A0 + e1_0 * local[0] + e2_0 * local[1];
     
     // 2. Find closest triangle
     Real minDist = std::numeric_limits<Real>::max();
@@ -446,7 +446,7 @@ void SlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, sofa::
     for(unsigned int i=0; i<triangles.size(); i++) {
         sofa::type::Vec3 close;
         const Triangle& tri = triangles[i];
-        bool ok = sofa::geometry::proximity::computeClosestPointOnTriangleToPoint(
+        bool const ok = sofa::geometry::proximity::computeClosestPointOnTriangleToPoint(
             sofa::type::Vec3(pos[tri[0]]), 
             sofa::type::Vec3(pos[tri[1]]), 
             sofa::type::Vec3(pos[tri[2]]), 
@@ -454,19 +454,19 @@ void SlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, sofa::
             close
         );
         if (ok) {
-            Real d = (Coord(close) - candidatePos).norm();
+            Real const d = (Coord(close) - candidatePos).norm();
             if (d < minDist) {
                 minDist = d;
                 bestTri = i;
                 
                 // Compute new local coords for this triangle
-                Coord A = pos[tri[0]];
-                Coord B = pos[tri[1]];
-                Coord C = pos[tri[2]];
-                Deriv v1 = B - A;
+                Coord const A = pos[tri[0]];
+                Coord const B = pos[tri[1]];
+                Coord const C = pos[tri[2]];
+                Deriv const v1 = B - A;
                 sofa::type::Vec3 e1 = v1; e1.normalize();
                 sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-                sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
+                sofa::type::Vec3 const e2 = sofa::type::cross(n, e1);
 
                 bestLocal[0] = (Coord(close) - A) * e1;
                 bestLocal[1] = (Coord(close) - A) * e2;
@@ -491,32 +491,32 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
     //     std::cout<<i<<", ";
     // std::cout<<std::endl;
 
-    unsigned int n_triangles = m_activeTriangles.size();
+    unsigned int const n_triangles = m_activeTriangles.size();
     // unsigned int startId = d_constraintIndex.getValue();
     
     if (!d_topology.get() || !m_state) return;
     const auto& triangles = d_topology.get()->getTriangles();
-    ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+    ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
 
     
     sofa::helper::WriteAccessor< sofa::Data<sofa::type::vector<sofa::type::Vec3>> > currentForces = d_currentForces;
-    Real maxStep = d_maxStepSize.getValue();
+    Real const maxStep = d_maxStepSize.getValue();
     Real damping = d_stepDamping.getValue();
     if (damping < 0.0) damping = 0.0;
     if (damping > 1.0) damping = 1.0;
     
     for(unsigned int i=0; i<n_triangles; i++) {
-        Real factor = d_jacobianScaleFactor.getValue();
-        Real Fx = lambda[ i*s_rowsPerPoint + 0] * factor;
-        Real Fy = lambda[ i*s_rowsPerPoint + 1] * factor;
-        Real Fz = lambda[ i*s_rowsPerPoint + 2] * factor;
+        Real const factor = d_jacobianScaleFactor.getValue();
+        Real const Fx = lambda[ i*s_rowsPerPoint + 0] * factor;
+        Real const Fy = lambda[ i*s_rowsPerPoint + 1] * factor;
+        Real const Fz = lambda[ i*s_rowsPerPoint + 2] * factor;
         Real dU = lambda[ i*s_rowsPerPoint + 3] * factor;
         Real dV = lambda[ i*s_rowsPerPoint + 4] * factor;
 
-        unsigned int triangleIdx = m_activeTriangles[i];
+        unsigned int const triangleIdx = m_activeTriangles[i];
         const Triangle& tri = triangles[triangleIdx];
 
-        sofa::type::Vec3 currentForce = d_currentForces.getValue()[i];
+        sofa::type::Vec3 const currentForce = d_currentForces.getValue()[i];
         sofa::type::Vec3 gradientForce = currentForce;
         
         // Handle vanishing gradients when force is zero.
@@ -574,25 +574,25 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         const Coord& A = pos[tri[0]];
         const Coord& B = pos[tri[1]];
         const Coord& C = pos[tri[2]];
-        Deriv v1 = B - A;
-        Deriv v2 = C - A;
+        Deriv const v1 = B - A;
+        Deriv const v2 = C - A;
         sofa::type::Vec3 nBasis = sofa::type::cross(v1, v2);
-        Real area2 = nBasis.norm();
+        Real const area2 = nBasis.norm();
         if (area2 > s_squaredEpsilon) nBasis /= area2;
         sofa::type::Vec3 e1 = v1; e1.normalize();
-        sofa::type::Vec3 e2 = sofa::type::cross(nBasis, e1);
+        sofa::type::Vec3 const e2 = sofa::type::cross(nBasis, e1);
 
         Real v1x = v1 * e1;
-        Real v2x = v2 * e1;
+        Real const v2x = v2 * e1;
         Real v2y = v2 * e2;
         if (std::abs(v1x) < s_squaredEpsilon) v1x = 1.0;
         if (std::abs(v2y) < s_squaredEpsilon) v2y = 1.0;
 
-        Real weightC = m_activeLocalCoords[i][1] / v2y;
-        Real weightB = (m_activeLocalCoords[i][0] - weightC * v2x) / v1x;
-        Real weightA = 1.0 - weightB - weightC;
+        Real const weightC = m_activeLocalCoords[i][1] / v2y;
+        Real const weightB = (m_activeLocalCoords[i][0] - weightC * v2x) / v1x;
+        Real const weightA = 1.0 - weightB - weightC;
 
-        bool oob = (weightA < 0 || weightB < 0 || weightC < 0);
+        bool const oob = (weightA < 0 || weightB < 0 || weightC < 0);
 
         if (oob) {
             projectToMesh(m_activeTriangles[i], m_activeLocalCoords[i]);
@@ -606,18 +606,18 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
     // Update current location
     {
         const auto& triangles = d_topology.get()->getTriangles();
-        ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+        ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
         sofa::type::vector<sofa::type::Vec3> currentLocations;
         currentLocations.resize(m_activeTriangles.size());
         for(unsigned int i=0; i<m_activeTriangles.size(); i++) {
-            unsigned int triIdx = m_activeTriangles[i];
+            unsigned int const triIdx = m_activeTriangles[i];
             if(triIdx < triangles.size()) {
                 const Triangle& t = triangles[triIdx];
-                Coord A = pos[t[0]]; Coord B = pos[t[1]]; Coord C = pos[t[2]];
-                Deriv v1 = B-A;
+                Coord const A = pos[t[0]]; Coord const B = pos[t[1]]; Coord const C = pos[t[2]];
+                Deriv const v1 = B-A;
                 sofa::type::Vec3 e1 = v1; e1.normalize();
                 sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-                sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
+                sofa::type::Vec3 const e2 = sofa::type::cross(n, e1);
                 currentLocations[i] = A + e1 * m_activeLocalCoords[i][0] + e2 * m_activeLocalCoords[i][1];
             }
         }
@@ -643,11 +643,11 @@ void SlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
     vparams->drawTool()->setLightingEnabled(true);
     
     const auto& triangles = d_topology.get()->getTriangles();
-    ReadAccessor<Data<VecCoord>> pos = m_state->readPositions();
+    ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
     
     // Highlight active triangles
     for(unsigned int i=0; i<m_activeTriangles.size(); i++) {
-        unsigned int triIdx = m_activeTriangles[i];
+        unsigned int const triIdx = m_activeTriangles[i];
         if (triIdx >= triangles.size()) continue;
         
         const Triangle& t = triangles[triIdx];
@@ -655,25 +655,25 @@ void SlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
     }
 
     for(unsigned int i=0; i<m_activeTriangles.size(); i++) {
-        unsigned int triIdx = m_activeTriangles[i];
+        unsigned int const triIdx = m_activeTriangles[i];
         if (triIdx >= triangles.size()) continue;
         
         const Triangle& t = triangles[triIdx];
-        Coord A = pos[t[0]];
-        Coord B = pos[t[1]];
-        Coord C = pos[t[2]];
+        Coord const A = pos[t[0]];
+        Coord const B = pos[t[1]];
+        Coord const C = pos[t[2]];
         
         sofa::type::Vec3 local = m_activeLocalCoords[i];
-        Deriv v1 = B - A;
+        Deriv const v1 = B - A;
         sofa::type::Vec3 e1 = v1; e1.normalize();
         sofa::type::Vec3 n = sofa::type::cross(B-A, C-A); n.normalize();
-        sofa::type::Vec3 e2 = sofa::type::cross(n, e1);
+        sofa::type::Vec3 const e2 = sofa::type::cross(n, e1);
         
-        Coord P = A + e1 * local[0] + e2 * local[1];
+        Coord const P = A + e1 * local[0] + e2 * local[1];
         
-        sofa::type::Vec3 f = d_currentForces.getValue()[i];
+        sofa::type::Vec3 const f = d_currentForces.getValue()[i];
         if (f.norm2() < s_squaredEpsilon) continue;
-        sofa::type::Vec3 dir = f/f.norm();
+        sofa::type::Vec3 const dir = f/f.norm();
         
         vparams->drawTool()->drawArrow(P - dir * log(f.norm()+1)*d_visuScale.getValue(), P, 
                                         log(f.norm()+1)*d_visuScale.getValue()/20.0, 
