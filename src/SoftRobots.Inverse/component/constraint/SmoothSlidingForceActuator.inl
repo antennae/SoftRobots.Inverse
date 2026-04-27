@@ -302,7 +302,7 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
 
     // Find closest point on mesh surface
     Real minDist = std::numeric_limits<Real>::max();
-    int bestTri = -1;
+    unsigned int bestTri = triangles.size();  // sentinel: any value >= size means "not found"
     sofa::type::Vec3 bestClose;
     for(unsigned int j = 0; j < triangles.size(); j++) {
         sofa::type::Vec3 close;
@@ -314,7 +314,7 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
             if (d < minDist) { minDist = d; bestTri = j; bestClose = close; }
         }
     }
-    if (bestTri < 0) return;
+    if (bestTri >= triangles.size()) return;
 
     // Compute barycentric coords of the closest point
     const Triangle& bt = triangles[bestTri];
