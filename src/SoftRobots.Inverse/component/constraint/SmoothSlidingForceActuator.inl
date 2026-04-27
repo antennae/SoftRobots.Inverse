@@ -2,6 +2,7 @@
 
 #include <unordered_set>
 #include <iostream>
+#include <limits>
 
 #include <SoftRobots.Inverse/component/constraint/SmoothSlidingForceActuator.h>
 #include <sofa/core/visual/VisualParams.h>
@@ -69,7 +70,7 @@ template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::initData()
 {
     unsigned int nbPoints = this->d_triangleIndices.getValue().size();
-    this->m_dim = nbPoints * 5;
+    this->m_dim = nbPoints * s_rowsPerPoint;
     this->m_nbLines = this->m_dim;
     this->m_activeTriangles = this->d_triangleIndices.getValue();
 
@@ -93,12 +94,12 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
             sumLen += (pos[tri[0]] - pos[tri[2]]).norm();
             count += 3;
         }
-        m_meanEdgeLength = (count > 0 && sumLen > 1e-12) ? sumLen / count : 1.0;
+        m_meanEdgeLength = (count > 0 && sumLen > s_squaredEpsilon) ? sumLen / count : 1.0;
     }
 
     this->m_lambdaInit.assign(this->m_dim, 0.0);
-    this->m_lambdaMax.assign(this->m_dim, 1e20);
-    this->m_lambdaMin.assign(this->m_dim, -1e20);
+    this->m_lambdaMax.assign(this->m_dim, std::numeric_limits<Real>::max());
+    this->m_lambdaMin.assign(this->m_dim, std::numeric_limits<Real>::lowest());
 
     sofa::type::vector<sofa::type::Vec3> currentForces;
     currentForces.resize(nbPoints);
@@ -106,7 +107,7 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
         const auto& triangles = this->d_topology.get()->getTriangles();
         ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
         sofa::type::Vec3 f0 = this->d_initForce.getValue();
-        Real fMag = f0.norm(); if (fMag == 0.0) fMag = 1e-3;
+        Real fMag = f0.norm(); if (fMag == 0.0) fMag = s_fallbackForceMag;
         for(unsigned int i=0; i<nbPoints; i++) {
              unsigned int triIdx = this->m_activeTriangles[i];
              if(triIdx < triangles.size()) {
@@ -128,11 +129,11 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
     // Warm-start: seed lambdaInit from initForce so the QP starts near the solution
     this->m_hasLambdaInit = true;
     for (unsigned int i = 0; i < nbPoints; i++) {
-        this->m_lambdaInit[i*5 + 0] = currentForces[i][0];
-        this->m_lambdaInit[i*5 + 1] = currentForces[i][1];
-        this->m_lambdaInit[i*5 + 2] = currentForces[i][2];
-        this->m_lambdaInit[i*5 + 3] = 0.0;
-        this->m_lambdaInit[i*5 + 4] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerPoint +0] = currentForces[i][0];
+        this->m_lambdaInit[i*s_rowsPerPoint +1] = currentForces[i][1];
+        this->m_lambdaInit[i*s_rowsPerPoint +2] = currentForces[i][2];
+        this->m_lambdaInit[i*s_rowsPerPoint +3] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerPoint +4] = 0.0;
     }
 }
 
@@ -148,16 +149,16 @@ void SmoothSlidingForceActuator<DataTypes>::updateVertexNormals()
         sofa::type::Vec3 n = sofa::type::cross(pos[tri[1]]-pos[tri[0]], pos[tri[2]]-pos[tri[0]]);
         this->m_vertexNormals[tri[0]] += n; this->m_vertexNormals[tri[1]] += n; this->m_vertexNormals[tri[2]] += n;
     }
-    for (auto& n : this->m_vertexNormals) if (n.norm2() > 1e-12) n.normalize();
+    for (auto& n : this->m_vertexNormals) if (n.norm2() > s_squaredEpsilon) n.normalize();
 }
 
 template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::updateLimit()
 {
-    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : 1e20;
-    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : -1e20;
+    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : std::numeric_limits<Real>::max();
+    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : std::numeric_limits<Real>::lowest();
     // Convert mm step size to barycentric units
-    Real maxStep_bary = (m_meanEdgeLength > 1e-12)
+    Real maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
     Real maxForceStep = this->d_maxForceStep.getValue();
@@ -168,20 +169,20 @@ void SmoothSlidingForceActuator<DataTypes>::updateLimit()
         sofa::type::Vec3 curF = (i < currentForces.size()) ? currentForces[i] : sofa::type::Vec3(0,0,0);
 
         if (maxForceStep > 0.0) {
-            this->m_lambdaMin[i*5 + 0] = std::max(minF, curF[0] - maxForceStep);
-            this->m_lambdaMax[i*5 + 0] = std::min(maxF, curF[0] + maxForceStep);
-            this->m_lambdaMin[i*5 + 1] = std::max(minF, curF[1] - maxForceStep);
-            this->m_lambdaMax[i*5 + 1] = std::min(maxF, curF[1] + maxForceStep);
-            this->m_lambdaMin[i*5 + 2] = std::max(minF, curF[2] - maxForceStep);
-            this->m_lambdaMax[i*5 + 2] = std::min(maxF, curF[2] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerPoint +0] = std::max(minF, curF[0] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerPoint +0] = std::min(maxF, curF[0] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerPoint +1] = std::max(minF, curF[1] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerPoint +1] = std::min(maxF, curF[1] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerPoint +2] = std::max(minF, curF[2] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerPoint +2] = std::min(maxF, curF[2] + maxForceStep);
         } else {
-            this->m_lambdaMin[i*5 + 0] = minF; this->m_lambdaMax[i*5 + 0] = maxF;
-            this->m_lambdaMin[i*5 + 1] = minF; this->m_lambdaMax[i*5 + 1] = maxF;
-            this->m_lambdaMin[i*5 + 2] = minF; this->m_lambdaMax[i*5 + 2] = maxF;
+            this->m_lambdaMin[i*s_rowsPerPoint +0] = minF; this->m_lambdaMax[i*s_rowsPerPoint +0] = maxF;
+            this->m_lambdaMin[i*s_rowsPerPoint +1] = minF; this->m_lambdaMax[i*s_rowsPerPoint +1] = maxF;
+            this->m_lambdaMin[i*s_rowsPerPoint +2] = minF; this->m_lambdaMax[i*s_rowsPerPoint +2] = maxF;
         }
         // Sliding bounds in barycentric units
-        this->m_lambdaMin[i*5 + 3] = -maxStep_bary; this->m_lambdaMax[i*5 + 3] = maxStep_bary;
-        this->m_lambdaMin[i*5 + 4] = -maxStep_bary; this->m_lambdaMax[i*5 + 4] = maxStep_bary;
+        this->m_lambdaMin[i*s_rowsPerPoint +3] = -maxStep_bary; this->m_lambdaMax[i*s_rowsPerPoint +3] = maxStep_bary;
+        this->m_lambdaMin[i*s_rowsPerPoint +4] = -maxStep_bary; this->m_lambdaMax[i*s_rowsPerPoint +4] = maxStep_bary;
     }
 }
 
@@ -200,7 +201,7 @@ void SmoothSlidingForceActuator<DataTypes>::getBarycentricCoords(
     Real d20 = v2 * v0;
     Real d21 = v2 * v1;
     Real denom = d00 * d11 - d01 * d01;
-    if (std::abs(denom) < 1e-12) { wB = 1.0/3; wC = 1.0/3; return; }
+    if (std::abs(denom) < s_squaredEpsilon) { wB = 1.0/3; wC = 1.0/3; return; }
     wB = (d11 * d20 - d01 * d21) / denom;
     wC = (d00 * d21 - d01 * d20) / denom;
 }
@@ -248,12 +249,14 @@ void SmoothSlidingForceActuator<DataTypes>::buildConstraintMatrix(const Constrai
                                    ? this->m_smoothForces[i]
                                    : sofa::type::Vec3(0, 0, 0);
         Real smoothFMag = smoothF.norm();
+        // Practical "no usable force direction" threshold; below this, fall back to face normal.
+        // Looser than s_squaredEpsilon because we're testing a force magnitude, not numerical zero.
         if (smoothFMag < 1e-6) {
             // Fall back to face normal
             sofa::type::Vec3 nFace = sofa::type::cross(
                 pos[tri[1]] - pos[tri[0]], pos[tri[2]] - pos[tri[0]]);
             Real a2 = nFace.norm();
-            smoothF = (a2 > 1e-12) ? nFace / a2 : sofa::type::Vec3(0, 0, 1);
+            smoothF = (a2 > s_squaredEpsilon) ? nFace / a2 : sofa::type::Vec3(0, 0, 1);
         } else {
             smoothF /= smoothFMag;
         }
@@ -276,7 +279,7 @@ template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::getConstraintViolation(const ConstraintParams* cParams, BaseVector *resV, const BaseVector *Jdx)
 {
     SOFA_UNUSED(cParams); SOFA_UNUSED(Jdx);
-    unsigned int totalDim = this->m_activeTriangles.size() * 5;
+    unsigned int totalDim = this->m_activeTriangles.size() * s_rowsPerPoint;
     const auto& constraintId = sofa::helper::getReadAccessor(this->d_constraintIndex);
     for(unsigned int i=0; i<totalDim; i++) resV->set(constraintId + i, 0.);
 }
@@ -298,7 +301,7 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
         sofa::type::Vec3(pos[t0[2]]) * wC;
 
     // Find closest point on mesh surface
-    Real minDist = 1e99;
+    Real minDist = std::numeric_limits<Real>::max();
     int bestTri = -1;
     sofa::type::Vec3 bestClose;
     for(unsigned int j = 0; j < triangles.size(); j++) {
@@ -337,17 +340,17 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
     WriteAccessor<Data<sofa::type::vector<sofa::type::Vec3>>> currentForces = this->d_currentForces;
     Real damping = this->d_stepDamping.getValue();
     // Max step in barycentric units (same conversion as updateLimit)
-    Real maxStep_bary = (m_meanEdgeLength > 1e-12)
+    Real maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
 
     for(unsigned int i=0; i<nbPoints; i++) {
         Real factor = this->d_jacobianScaleFactor.getValue();
-        Real Fx = lambda[i*5 + 0] * factor;
-        Real Fy = lambda[i*5 + 1] * factor;
-        Real Fz = lambda[i*5 + 2] * factor;
-        Real dwB = lambda[i*5 + 3] * factor;
-        Real dwC = lambda[i*5 + 4] * factor;
+        Real Fx = lambda[i*s_rowsPerPoint +0] * factor;
+        Real Fy = lambda[i*s_rowsPerPoint +1] * factor;
+        Real Fz = lambda[i*s_rowsPerPoint +2] * factor;
+        Real dwB = lambda[i*s_rowsPerPoint +3] * factor;
+        Real dwC = lambda[i*s_rowsPerPoint +4] * factor;
         if (std::isnan(Fx + Fy + Fz + dwB + dwC)) continue;
 
         // Update force
@@ -362,11 +365,11 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
             this->m_smoothForces[i] = currentForces[i];
 
         // Warm-start for next QP
-        this->m_lambdaInit[i*5 + 0] = currentForces[i][0];
-        this->m_lambdaInit[i*5 + 1] = currentForces[i][1];
-        this->m_lambdaInit[i*5 + 2] = currentForces[i][2];
-        this->m_lambdaInit[i*5 + 3] = 0.0;
-        this->m_lambdaInit[i*5 + 4] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerPoint +0] = currentForces[i][0];
+        this->m_lambdaInit[i*s_rowsPerPoint +1] = currentForces[i][1];
+        this->m_lambdaInit[i*s_rowsPerPoint +2] = currentForces[i][2];
+        this->m_lambdaInit[i*s_rowsPerPoint +3] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerPoint +4] = 0.0;
 
         // Sliding momentum: EMA of QP slide outputs.
         // Consistent signals accumulate; noisy signals cancel out.
@@ -454,7 +457,7 @@ void SmoothSlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
         sofa::type::Vec3 f = this->d_currentForces.getValue().size() > i
                            ? this->d_currentForces.getValue()[i]
                            : sofa::type::Vec3(0, 0, 0);
-        if (f.norm2() < 1e-12) continue;
+        if (f.norm2() < s_squaredEpsilon) continue;
         sofa::type::Vec3 dir = f / f.norm();
         vparams->drawTool()->drawArrow(
             P - dir * log(f.norm()+1) * this->d_visuScale.getValue(),

@@ -101,7 +101,16 @@ protected:
     sofa::Data<bool>                             d_showForce;
     sofa::Data<Real>                             d_visuScale;
 
-    sofa::Size                                   m_dim; 
+    sofa::Size                                   m_dim;
+
+    // Each active point contributes 5 constraint rows:
+    //   indices [0, 1, 2] = force components (x, y, z)
+    //   indices [3, 4]    = sliding tangent step (dwB, dwC) in smoothed-frame barycentric
+    static constexpr unsigned int s_rowsPerPoint = 5;
+
+    // Numerical tolerances; chosen empirically, tune if convergence issues arise.
+    static constexpr Real s_squaredEpsilon   = Real(1e-12); // for norm2() / squared-length / area checks
+    static constexpr Real s_fallbackForceMag = Real(1e-3);  // fallback magnitude when initForce is zero
 
     sofa::SingleLink<SmoothSlidingForceActuator<DataTypes>, sofa::core::topology::BaseMeshTopology, sofa::core::objectmodel::BaseLink::FLAG_STRONGLINK> d_topology;
 
