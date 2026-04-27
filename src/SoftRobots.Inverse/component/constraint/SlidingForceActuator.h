@@ -86,10 +86,10 @@ protected:
     sofa::Data<Real>                             d_stepDamping; // Damping factor for sliding step (0..1)
     sofa::Data<Real>                             d_epsilonForce; // regularization
     sofa::Data<Real>                             d_epsilonSliding; // regularization for sliding
+    sofa::Data<Real>                             d_epsilon; // Overall regularization (deprecated, use d_epsilonForce and d_epsilonSliding instead)
     sofa::Data<Real>                             d_ridgeForce; // Ridge for force variable
     sofa::Data<Real>                             d_ridgeSliding; // Ridge for sliding variable
     sofa::Data<Real>                             d_jacobianScaleFactor; // Factor to scale constraint Jacobian rows (default 1.0). Use ~3.33 for 30% YM smoothing.
-    sofa::Data<Real>                             d_epsilon; // Overall regularization (deprecated, use d_epsilonForce and d_epsilonSliding instead)
 
     // Internal State
     sofa::Data<sofa::type::vector<sofa::type::Vec3>> d_currentForces; // Force from previous step (needed for gradients)

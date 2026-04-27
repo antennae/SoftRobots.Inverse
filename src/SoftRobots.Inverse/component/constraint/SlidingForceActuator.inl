@@ -28,13 +28,13 @@ SlidingForceActuator<DataTypes>::SlidingForceActuator(MechanicalState* object)
     , d_maxForceStep(initData(&d_maxForceStep, Real(0.0), "maxForceStep", "Max change in force magnitude per iteration (0 = no limit)"))
     , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Trust region for sliding (Cartesian step limit in tangent plane)"))
     , d_stepDamping(initData(&d_stepDamping, Real(0.5), "stepDamping", "Damping factor for sliding step (0.1). Lower reduces jitter."))
-    , d_epsilon(initData(&d_epsilon, Real(1e-3), "epsilon", 
-                "Regularization for the constraint. Use this value to prioritize the constraint. 0 means no limitation on the energy transfered by this actuator. Default is 1e-3."))
     , d_epsilonForce(initData(&d_epsilonForce, Real(1e-3), "epsilonForce",
                            "Use this value to prioritize the constraint. 0 means no limitation on the energy transfered by this actuator. Default is 1e-3."))
     , d_epsilonSliding(initData(&d_epsilonSliding, Real(1e-3), "epsilonSliding",
                            "Use this value to prioritize the sliding constraint. Default is 1e-3."))
-    , d_ridgeForce(initData(&d_ridgeForce, Real(1e-12), "ridgeForce", 
+    , d_epsilon(initData(&d_epsilon, Real(1e-3), "epsilon",
+                "Regularization for the constraint. Use this value to prioritize the constraint. 0 means no limitation on the energy transfered by this actuator. Default is 1e-3."))
+    , d_ridgeForce(initData(&d_ridgeForce, Real(1e-12), "ridgeForce",
                         "Ridge for force variable to improve convergence when the optimal force is close to zero. Default is 1e-12."))
     , d_ridgeSliding(initData(&d_ridgeSliding, Real(1e-12), "ridgeSliding", 
                         "Ridge for sliding variable to improve convergence when the optimal sliding is close to zero. Default is 1e-12."))
