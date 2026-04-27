@@ -69,7 +69,7 @@ void SmoothSlidingForceActuator<DataTypes>::reinit()
 template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::initData()
 {
-    unsigned int nbPoints = this->d_triangleIndices.getValue().size();
+    unsigned int const nbPoints = this->d_triangleIndices.getValue().size();
     this->m_dim = nbPoints * s_rowsPerPoint;
     this->m_nbLines = this->m_dim;
     this->m_activeTriangles = this->d_triangleIndices.getValue();
@@ -86,7 +86,7 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
     // Compute mean edge length for step-size conversion (mm -> barycentric)
     if (this->d_topology.get() && this->m_state) {
         const auto& triangles = this->d_topology.get()->getTriangles();
-        ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
+        ReadAccessor<Data<VecCoord>> const pos = this->m_state->readPositions();
         Real sumLen = 0.0; int count = 0;
         for (const auto& tri : triangles) {
             sumLen += (pos[tri[1]] - pos[tri[0]]).norm();
@@ -105,11 +105,11 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
     currentForces.resize(nbPoints);
     if (this->d_topology.get() && this->m_state) {
         const auto& triangles = this->d_topology.get()->getTriangles();
-        ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
-        sofa::type::Vec3 f0 = this->d_initForce.getValue();
+        ReadAccessor<Data<VecCoord>> const pos = this->m_state->readPositions();
+        sofa::type::Vec3 const f0 = this->d_initForce.getValue();
         Real fMag = f0.norm(); if (fMag == 0.0) fMag = s_fallbackForceMag;
         for(unsigned int i=0; i<nbPoints; i++) {
-             unsigned int triIdx = this->m_activeTriangles[i];
+             unsigned int const triIdx = this->m_activeTriangles[i];
              if(triIdx < triangles.size()) {
                  const Triangle& t = triangles[triIdx];
                  sofa::type::Vec3 n = sofa::type::cross(pos[t[1]]-pos[t[0]], pos[t[2]]-pos[t[0]]);
@@ -142,11 +142,11 @@ void SmoothSlidingForceActuator<DataTypes>::updateVertexNormals()
 {
     if (!this->d_topology.get() || !this->m_state) return;
     const auto& triangles = this->d_topology.get()->getTriangles();
-    ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
-    size_t nbNodes = pos.size();
+    ReadAccessor<Data<VecCoord>> const pos = this->m_state->readPositions();
+    size_t const nbNodes = pos.size();
     this->m_vertexNormals.assign(nbNodes, sofa::type::Vec3(0,0,0));
     for (const auto& tri : triangles) {
-        sofa::type::Vec3 n = sofa::type::cross(pos[tri[1]]-pos[tri[0]], pos[tri[2]]-pos[tri[0]]);
+        sofa::type::Vec3 const n = sofa::type::cross(pos[tri[1]]-pos[tri[0]], pos[tri[2]]-pos[tri[0]]);
         this->m_vertexNormals[tri[0]] += n; this->m_vertexNormals[tri[1]] += n; this->m_vertexNormals[tri[2]] += n;
     }
     for (auto& n : this->m_vertexNormals) if (n.norm2() > s_squaredEpsilon) n.normalize();
@@ -155,15 +155,15 @@ void SmoothSlidingForceActuator<DataTypes>::updateVertexNormals()
 template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::updateLimit()
 {
-    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : std::numeric_limits<Real>::max();
-    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : std::numeric_limits<Real>::lowest();
+    Real const maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : std::numeric_limits<Real>::max();
+    Real const minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : std::numeric_limits<Real>::lowest();
     // Convert mm step size to barycentric units
-    Real maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
+    Real const maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
-    Real maxForceStep = this->d_maxForceStep.getValue();
+    Real const maxForceStep = this->d_maxForceStep.getValue();
     const auto& currentForces = this->d_currentForces.getValue();
-    unsigned int nbPoints = this->m_activeTriangles.size();
+    unsigned int const nbPoints = this->m_activeTriangles.size();
 
     for(unsigned int i=0; i<nbPoints; i++) {
         sofa::type::Vec3 curF = (i < currentForces.size()) ? currentForces[i] : sofa::type::Vec3(0,0,0);
@@ -192,15 +192,15 @@ void SmoothSlidingForceActuator<DataTypes>::getBarycentricCoords(
     const sofa::type::Vec3& P, Real& wB, Real& wC)
 {
     // Möller barycentric decomposition (frame-independent)
-    sofa::type::Vec3 v0 = B - A;  // edge AB
-    sofa::type::Vec3 v1 = C - A;  // edge AC
-    sofa::type::Vec3 v2 = P - A;
-    Real d00 = v0 * v0;
-    Real d01 = v0 * v1;
-    Real d11 = v1 * v1;
-    Real d20 = v2 * v0;
-    Real d21 = v2 * v1;
-    Real denom = d00 * d11 - d01 * d01;
+    sofa::type::Vec3 const v0 = B - A;  // edge AB
+    sofa::type::Vec3 const v1 = C - A;  // edge AC
+    sofa::type::Vec3 const v2 = P - A;
+    Real const d00 = v0 * v0;
+    Real const d01 = v0 * v1;
+    Real const d11 = v1 * v1;
+    Real const d20 = v2 * v0;
+    Real const d21 = v2 * v1;
+    Real const denom = d00 * d11 - d01 * d01;
     if (std::abs(denom) < s_squaredEpsilon) { wB = 1.0/3; wC = 1.0/3; return; }
     wB = (d11 * d20 - d01 * d21) / denom;
     wC = (d00 * d21 - d01 * d20) / denom;
@@ -214,16 +214,16 @@ void SmoothSlidingForceActuator<DataTypes>::buildConstraintMatrix(const Constrai
 {
     SOFA_UNUSED(cParams);
     this->d_constraintIndex.setValue(cIndex);
-    unsigned int startId = cIndex;
+    unsigned int const startId = cIndex;
     if (!this->d_topology.get()) return;
     const auto& triangles = this->d_topology.get()->getTriangles();
     const VecCoord& pos = x.getValue();
     MatrixDeriv& matrix = *cMatrix.beginEdit();
 
-    Real factor = this->d_jacobianScaleFactor.getValue();
+    Real const factor = this->d_jacobianScaleFactor.getValue();
 
     for(unsigned int i=0; i<this->m_activeTriangles.size(); i++) {
-        unsigned int triIdx = this->m_activeTriangles[i];
+        unsigned int const triIdx = this->m_activeTriangles[i];
         if (triIdx >= triangles.size()) continue;
         const Triangle& tri = triangles[triIdx];
         const sofa::type::Vec3& local = this->m_activeLocalCoords[i];
@@ -248,14 +248,14 @@ void SmoothSlidingForceActuator<DataTypes>::buildConstraintMatrix(const Constrai
         sofa::type::Vec3 smoothF = (this->m_smoothForces.size() > i)
                                    ? this->m_smoothForces[i]
                                    : sofa::type::Vec3(0, 0, 0);
-        Real smoothFMag = smoothF.norm();
+        Real const smoothFMag = smoothF.norm();
         // Practical "no usable force direction" threshold; below this, fall back to face normal.
         // Looser than s_squaredEpsilon because we're testing a force magnitude, not numerical zero.
         if (smoothFMag < 1e-6) {
             // Fall back to face normal
-            sofa::type::Vec3 nFace = sofa::type::cross(
+            sofa::type::Vec3 const nFace = sofa::type::cross(
                 pos[tri[1]] - pos[tri[0]], pos[tri[2]] - pos[tri[0]]);
-            Real a2 = nFace.norm();
+            Real const a2 = nFace.norm();
             smoothF = (a2 > s_squaredEpsilon) ? nFace / a2 : sofa::type::Vec3(0, 0, 1);
         } else {
             smoothF /= smoothFMag;
@@ -279,7 +279,7 @@ template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::getConstraintViolation(const ConstraintParams* cParams, BaseVector *resV, const BaseVector *Jdx)
 {
     SOFA_UNUSED(cParams); SOFA_UNUSED(Jdx);
-    unsigned int totalDim = this->m_activeTriangles.size() * s_rowsPerPoint;
+    unsigned int const totalDim = this->m_activeTriangles.size() * s_rowsPerPoint;
     const auto& constraintId = sofa::helper::getReadAccessor(this->d_constraintIndex);
     for(unsigned int i=0; i<totalDim; i++) resV->set(constraintId + i, 0.);
 }
@@ -289,13 +289,13 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
 {
     if (!this->d_topology.get() || !this->m_state) return;
     const auto& triangles = this->d_topology.get()->getTriangles();
-    ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
+    ReadAccessor<Data<VecCoord>> const pos = this->m_state->readPositions();
     if (triIdx >= triangles.size()) return;
 
     // Reconstruct 3D candidate from barycentric
     const Triangle& t0 = triangles[triIdx];
     Real wB = local[0], wC = local[1], wA = 1.0 - wB - wC;
-    sofa::type::Vec3 candidatePos =
+    sofa::type::Vec3 const candidatePos =
         sofa::type::Vec3(pos[t0[0]]) * wA +
         sofa::type::Vec3(pos[t0[1]]) * wB +
         sofa::type::Vec3(pos[t0[2]]) * wC;
@@ -310,7 +310,7 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
         if (sofa::geometry::proximity::computeClosestPointOnTriangleToPoint(
                 sofa::type::Vec3(pos[tri[0]]), sofa::type::Vec3(pos[tri[1]]),
                 sofa::type::Vec3(pos[tri[2]]), candidatePos, close)) {
-            Real d = (close - candidatePos).norm();
+            Real const d = (close - candidatePos).norm();
             if (d < minDist) { minDist = d; bestTri = j; bestClose = close; }
         }
     }
@@ -324,7 +324,7 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
     // Clamp to valid range
     newWB = std::max(Real(0), newWB);
     newWC = std::max(Real(0), newWC);
-    if (newWB + newWC > 1.0) { Real s = 1.0 / (newWB + newWC); newWB *= s; newWC *= s; }
+    if (newWB + newWC > 1.0) { Real const s = 1.0 / (newWB + newWC); newWB *= s; newWC *= s; }
 
     triIdx = bestTri;
     local = sofa::type::Vec3(newWB, newWC, 0);
@@ -333,22 +333,22 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
 template<class DataTypes>
 void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vector<double> &delta)
 {
-    unsigned int nbPoints = this->m_activeTriangles.size();
+    unsigned int const nbPoints = this->m_activeTriangles.size();
     if (!this->d_topology.get() || !this->m_state) return;
     const auto& triangles = this->d_topology.get()->getTriangles();
-    ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
+    ReadAccessor<Data<VecCoord>> const pos = this->m_state->readPositions();
     WriteAccessor<Data<sofa::type::vector<sofa::type::Vec3>>> currentForces = this->d_currentForces;
-    Real damping = this->d_stepDamping.getValue();
+    Real const damping = this->d_stepDamping.getValue();
     // Max step in barycentric units (same conversion as updateLimit)
-    Real maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
+    Real const maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
 
     for(unsigned int i=0; i<nbPoints; i++) {
-        Real factor = this->d_jacobianScaleFactor.getValue();
-        Real Fx = lambda[i*s_rowsPerPoint +0] * factor;
-        Real Fy = lambda[i*s_rowsPerPoint +1] * factor;
-        Real Fz = lambda[i*s_rowsPerPoint +2] * factor;
+        Real const factor = this->d_jacobianScaleFactor.getValue();
+        Real const Fx = lambda[i*s_rowsPerPoint +0] * factor;
+        Real const Fy = lambda[i*s_rowsPerPoint +1] * factor;
+        Real const Fz = lambda[i*s_rowsPerPoint +2] * factor;
         Real dwB = lambda[i*s_rowsPerPoint +3] * factor;
         Real dwC = lambda[i*s_rowsPerPoint +4] * factor;
         if (std::isnan(Fx + Fy + Fz + dwB + dwC)) continue;
@@ -357,7 +357,7 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
         currentForces[i] = sofa::type::Vec3(Fx, Fy, Fz);
 
         // EMA: update smooth force direction used by next Jacobian build
-        Real momentum = this->d_dirMomentum.getValue();
+        Real const momentum = this->d_dirMomentum.getValue();
         if (momentum > 0.0 && this->m_smoothForces.size() > i)
             this->m_smoothForces[i] = this->m_smoothForces[i] * momentum
                                       + currentForces[i] * (1.0 - momentum);
@@ -373,7 +373,7 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
 
         // Sliding momentum: EMA of QP slide outputs.
         // Consistent signals accumulate; noisy signals cancel out.
-        Real slideMom = this->d_slideMomentum.getValue();
+        Real const slideMom = this->d_slideMomentum.getValue();
         if (slideMom > 0.0) {
             m_slideMomentumB[i] = slideMom * m_slideMomentumB[i] + (1.0 - slideMom) * dwB;
             m_slideMomentumC[i] = slideMom * m_slideMomentumC[i] + (1.0 - slideMom) * dwC;
@@ -386,9 +386,9 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
         dwC *= damping;
 
         // Clamp step magnitude in barycentric space
-        Real stepMag = std::sqrt(dwB*dwB + dwC*dwC);
+        Real const stepMag = std::sqrt(dwB*dwB + dwC*dwC);
         if (stepMag > maxStep_bary) {
-            Real s = maxStep_bary / stepMag;
+            Real const s = maxStep_bary / stepMag;
             dwB *= s; dwC *= s;
         }
 
@@ -397,9 +397,9 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
         this->m_activeLocalCoords[i][1] += dwC;
 
         // OOB check: if any weight < 0, project back onto mesh
-        Real wB = this->m_activeLocalCoords[i][0];
-        Real wC = this->m_activeLocalCoords[i][1];
-        Real wA = 1.0 - wB - wC;
+        Real const wB = this->m_activeLocalCoords[i][0];
+        Real const wC = this->m_activeLocalCoords[i][1];
+        Real const wA = 1.0 - wB - wC;
         if (wA < 0 || wB < 0 || wC < 0) {
             this->projectToMesh(this->m_activeTriangles[i], this->m_activeLocalCoords[i]);
             // Reset sliding momentum — barycentric frame changed
@@ -416,12 +416,12 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
     sofa::type::vector<sofa::type::Vec3> currentLocations;
     currentLocations.resize(nbPoints);
     for(unsigned int i=0; i<nbPoints; i++) {
-        unsigned int triIdx = this->m_activeTriangles[i];
+        unsigned int const triIdx = this->m_activeTriangles[i];
         if(triIdx < triangles.size()) {
             const Triangle& t = triangles[triIdx];
-            Real wB2 = this->m_activeLocalCoords[i][0];
-            Real wC2 = this->m_activeLocalCoords[i][1];
-            Real wA2 = 1.0 - wB2 - wC2;
+            Real const wB2 = this->m_activeLocalCoords[i][0];
+            Real const wC2 = this->m_activeLocalCoords[i][1];
+            Real const wA2 = 1.0 - wB2 - wC2;
             currentLocations[i] = sofa::type::Vec3(pos[t[0]]) * wA2
                                  + sofa::type::Vec3(pos[t[1]]) * wB2
                                  + sofa::type::Vec3(pos[t[2]]) * wC2;
@@ -438,27 +438,27 @@ void SmoothSlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
     if (!vparams->displayFlags().getShowInteractionForceFields() || !this->d_showForce.getValue()) return;
     if (!this->d_topology.get() || !this->m_state) return;
     vparams->drawTool()->setLightingEnabled(true);
-    ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
+    ReadAccessor<Data<VecCoord>> const pos = this->m_state->readPositions();
     const auto& triangles = this->d_topology.get()->getTriangles();
     for(unsigned int i=0; i<this->m_activeTriangles.size(); i++) {
-        unsigned int triIdx = this->m_activeTriangles[i];
+        unsigned int const triIdx = this->m_activeTriangles[i];
         if (triIdx >= triangles.size()) continue;
         const Triangle& t = triangles[triIdx];
         vparams->drawTool()->drawTriangle(pos[t[0]], pos[t[1]], pos[t[2]], sofa::type::Vec3(0,1,0), sofa::type::RGBAColor::yellow());
 
         // Contact point from barycentric
-        Real wB = this->m_activeLocalCoords[i][0];
-        Real wC = this->m_activeLocalCoords[i][1];
-        Real wA = 1.0 - wB - wC;
-        Coord P = sofa::type::Vec3(pos[t[0]]) * wA
+        Real const wB = this->m_activeLocalCoords[i][0];
+        Real const wC = this->m_activeLocalCoords[i][1];
+        Real const wA = 1.0 - wB - wC;
+        Coord const P = sofa::type::Vec3(pos[t[0]]) * wA
                 + sofa::type::Vec3(pos[t[1]]) * wB
                 + sofa::type::Vec3(pos[t[2]]) * wC;
 
-        sofa::type::Vec3 f = this->d_currentForces.getValue().size() > i
+        sofa::type::Vec3 const f = this->d_currentForces.getValue().size() > i
                            ? this->d_currentForces.getValue()[i]
                            : sofa::type::Vec3(0, 0, 0);
         if (f.norm2() < s_squaredEpsilon) continue;
-        sofa::type::Vec3 dir = f / f.norm();
+        sofa::type::Vec3 const dir = f / f.norm();
         vparams->drawTool()->drawArrow(
             P - dir * log(f.norm()+1) * this->d_visuScale.getValue(),
             P,
