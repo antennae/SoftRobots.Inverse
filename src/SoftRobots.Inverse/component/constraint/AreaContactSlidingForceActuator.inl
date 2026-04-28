@@ -241,7 +241,7 @@ bool AreaContactSlidingForceActuator<DataTypes>::findTriangleOnSphere(
         }
     }
 
-    if (bestTri >= 0) {
+    if (bestTri < m_sparTriangles.size()) {
         triIdx = bestTri;
         alpha = bestAlpha;
         beta = bestBeta;
