@@ -165,7 +165,7 @@ bool SphericalSlidingForceActuator<DataTypes>::radialBarycentric(
     // M = (v1 - v0) x (v2 - v0) — triangle normal (not normalized)
     Vec3 M = sofa::type::cross(v1 - v0, v2 - v0);
     Real M_dot_p = M * p_sph;
-    if (std::abs(M_dot_p) < Real(1e-30)) {
+    if (std::abs(M_dot_p) < s_squaredEpsilon) {
         alpha = beta = 0;
         return false;  // ray parallel to triangle
     }
@@ -207,6 +207,8 @@ bool SphericalSlidingForceActuator<DataTypes>::findTriangleOnSphere(
             continue;
 
         Real gamma = Real(1.0) - a - b;
+        // FP slack on barycentric containment: a/b/gamma can be slightly negative
+        // due to round-off when the ray hits exactly on an edge.
         if (a >= Real(-1e-8) && b >= Real(-1e-8) && gamma >= Real(-1e-8)) {
             triIdx = fi;
             alpha = a;
@@ -221,7 +223,7 @@ bool SphericalSlidingForceActuator<DataTypes>::findTriangleOnSphere(
                   + ac * (m_sparVertices[f[1]] - m_sparVertices[f[0]])
                   + bc * (m_sparVertices[f[2]] - m_sparVertices[f[0]]);
         Real pnorm = proj.norm();
-        if (pnorm > Real(1e-30)) proj /= pnorm;
+        if (pnorm > s_squaredEpsilon) proj /= pnorm;
         Real dist = (proj - p_sph).norm();
         if (dist < bestDist) {
             bestDist = dist;
@@ -269,7 +271,7 @@ void SphericalSlidingForceActuator<DataTypes>::computeSlidingJacobian(
 
     Vec3 M = sofa::type::cross(v1 - v0, v2 - v0);
     Real M_sq = M * M;
-    if (M_sq < Real(1e-30)) {
+    if (M_sq < s_squaredEpsilon) {
         da_dtheta = db_dtheta = da_dphi = db_dphi = 0;
         return;
     }
@@ -332,7 +334,7 @@ void SphericalSlidingForceActuator<DataTypes>::initData()
         return;
     }
 
-    this->m_dim = m_nbContacts * 5;
+    this->m_dim = m_nbContacts * s_rowsPerPoint;
     this->m_nbLines = this->m_dim;
 
     // Initialize per-contact state
@@ -356,8 +358,8 @@ void SphericalSlidingForceActuator<DataTypes>::initData()
 
     // Lambda bounds
     this->m_lambdaInit.assign(this->m_dim, 0.0);
-    this->m_lambdaMax.assign(this->m_dim, 1e20);
-    this->m_lambdaMin.assign(this->m_dim, -1e20);
+    this->m_lambdaMax.assign(this->m_dim, std::numeric_limits<Real>::max());
+    this->m_lambdaMin.assign(this->m_dim, std::numeric_limits<Real>::lowest());
 
     // Initialize forces from face normal (same pattern as SmoothSlidingForceActuator)
     sofa::type::vector<Vec3> currentForces;
@@ -366,7 +368,7 @@ void SphericalSlidingForceActuator<DataTypes>::initData()
         ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
         Vec3 f0 = this->d_initForce.getValue();
         Real fMag = f0.norm();
-        if (fMag == 0.0) fMag = Real(1e-3);
+        if (fMag == 0.0) fMag = s_fallbackForceMag;
         for (unsigned int i = 0; i < m_nbContacts; ++i) {
             unsigned int triIdx = m_currentTriSpar[i];
             if (triIdx < m_sparTriangles.size()) {
@@ -402,18 +404,18 @@ void SphericalSlidingForceActuator<DataTypes>::initData()
                                da_dt, db_dt, da_dp, db_dp);
         Real rnT = std::sqrt((da_dt + db_dt) * (da_dt + db_dt) + da_dt * da_dt + db_dt * db_dt);
         Real rnP = std::sqrt((da_dp + db_dp) * (da_dp + db_dp) + da_dp * da_dp + db_dp * db_dp);
-        m_rowNormTheta[i] = (rnT > Real(1e-12)) ? rnT : Real(1);
-        m_rowNormPhi[i]   = (rnP > Real(1e-12)) ? rnP : Real(1);
+        m_rowNormTheta[i] = (rnT > s_squaredEpsilon) ? rnT : Real(1);
+        m_rowNormPhi[i]   = (rnP > s_squaredEpsilon) ? rnP : Real(1);
     }
 
     // Warm-start lambda
     this->m_hasLambdaInit = true;
     for (unsigned int i = 0; i < m_nbContacts; ++i) {
-        this->m_lambdaInit[i*5 + 0] = currentForces[i][0];
-        this->m_lambdaInit[i*5 + 1] = currentForces[i][1];
-        this->m_lambdaInit[i*5 + 2] = currentForces[i][2];
-        this->m_lambdaInit[i*5 + 3] = 0.0;  // dTheta
-        this->m_lambdaInit[i*5 + 4] = 0.0;  // dPhi
+        this->m_lambdaInit[i*s_rowsPerPoint +0] = currentForces[i][0];
+        this->m_lambdaInit[i*s_rowsPerPoint +1] = currentForces[i][1];
+        this->m_lambdaInit[i*s_rowsPerPoint +2] = currentForces[i][2];
+        this->m_lambdaInit[i*s_rowsPerPoint +3] = 0.0;  // dTheta
+        this->m_lambdaInit[i*s_rowsPerPoint +4] = 0.0;  // dPhi
     }
 
     // Compute initial world-space locations
@@ -435,8 +437,8 @@ void SphericalSlidingForceActuator<DataTypes>::initData()
 template<class DataTypes>
 void SphericalSlidingForceActuator<DataTypes>::updateLimit()
 {
-    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : Real(1e20);
-    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : Real(-1e20);
+    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : std::numeric_limits<Real>::max();
+    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : std::numeric_limits<Real>::lowest();
     Real maxStep = this->d_maxStepSize.getValue();  // already in radians
     Real maxForceStep = this->d_maxForceStep.getValue();
     const auto& currentForces = this->d_currentForces.getValue();
@@ -448,16 +450,16 @@ void SphericalSlidingForceActuator<DataTypes>::updateLimit()
         Vec3 curF = (i < currentForces.size()) ? currentForces[i] : Vec3(0, 0, 0);
 
         if (maxForceStep > 0.0) {
-            this->m_lambdaMin[i*5 + 0] = std::max(minF, curF[0] - maxForceStep);
-            this->m_lambdaMax[i*5 + 0] = std::min(maxF, curF[0] + maxForceStep);
-            this->m_lambdaMin[i*5 + 1] = std::max(minF, curF[1] - maxForceStep);
-            this->m_lambdaMax[i*5 + 1] = std::min(maxF, curF[1] + maxForceStep);
-            this->m_lambdaMin[i*5 + 2] = std::max(minF, curF[2] - maxForceStep);
-            this->m_lambdaMax[i*5 + 2] = std::min(maxF, curF[2] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerPoint +0] = std::max(minF, curF[0] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerPoint +0] = std::min(maxF, curF[0] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerPoint +1] = std::max(minF, curF[1] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerPoint +1] = std::min(maxF, curF[1] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerPoint +2] = std::max(minF, curF[2] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerPoint +2] = std::min(maxF, curF[2] + maxForceStep);
         } else {
-            this->m_lambdaMin[i*5 + 0] = minF; this->m_lambdaMax[i*5 + 0] = maxF;
-            this->m_lambdaMin[i*5 + 1] = minF; this->m_lambdaMax[i*5 + 1] = maxF;
-            this->m_lambdaMin[i*5 + 2] = minF; this->m_lambdaMax[i*5 + 2] = maxF;
+            this->m_lambdaMin[i*s_rowsPerPoint +0] = minF; this->m_lambdaMax[i*s_rowsPerPoint +0] = maxF;
+            this->m_lambdaMin[i*s_rowsPerPoint +1] = minF; this->m_lambdaMax[i*s_rowsPerPoint +1] = maxF;
+            this->m_lambdaMin[i*s_rowsPerPoint +2] = minF; this->m_lambdaMax[i*s_rowsPerPoint +2] = maxF;
         }
         // Sliding bounds: scaled for normalized rows.
         // Physical dTheta = lambda_norm * factor / rowNorm.
@@ -465,10 +467,10 @@ void SphericalSlidingForceActuator<DataTypes>::updateLimit()
         Real factor = this->d_jacobianScaleFactor.getValue();
         Real rnT = (i < m_rowNormTheta.size()) ? m_rowNormTheta[i] : Real(1);
         Real rnP = (i < m_rowNormPhi.size())   ? m_rowNormPhi[i]   : Real(1);
-        Real boundT = maxStep * rnT / ((factor > Real(1e-12)) ? factor : Real(1));
-        Real boundP = maxStep * rnP / ((factor > Real(1e-12)) ? factor : Real(1));
-        this->m_lambdaMin[i*5 + 3] = -boundT; this->m_lambdaMax[i*5 + 3] = boundT;
-        this->m_lambdaMin[i*5 + 4] = -boundP; this->m_lambdaMax[i*5 + 4] = boundP;
+        Real boundT = maxStep * rnT / ((factor > s_squaredEpsilon) ? factor : Real(1));
+        Real boundP = maxStep * rnP / ((factor > s_squaredEpsilon) ? factor : Real(1));
+        this->m_lambdaMin[i*s_rowsPerPoint +3] = -boundT; this->m_lambdaMax[i*s_rowsPerPoint +3] = boundT;
+        this->m_lambdaMin[i*s_rowsPerPoint +4] = -boundP; this->m_lambdaMax[i*s_rowsPerPoint +4] = boundP;
     }
 }
 
@@ -520,13 +522,15 @@ void SphericalSlidingForceActuator<DataTypes>::buildConstraintMatrix(
         Vec3 smoothF = (m_smoothForces.size() > i)
                      ? m_smoothForces[i] : Vec3(0, 0, 0);
         Real smoothFMag = smoothF.norm();
+        // Practical "no usable force direction" threshold; below this, fall back to face normal.
+        // Looser than s_squaredEpsilon because we're testing a force magnitude, not numerical zero.
         if (smoothFMag < Real(1e-6)) {
             // Fall back to face normal on deformed mesh
             Vec3 nFace = sofa::type::cross(
                 Vec3(pos[f[1]]) - Vec3(pos[f[0]]),
                 Vec3(pos[f[2]]) - Vec3(pos[f[0]]));
             Real a2 = nFace.norm();
-            smoothF = (a2 > Real(1e-12)) ? nFace / a2 : Vec3(0, 0, 1);
+            smoothF = (a2 > s_squaredEpsilon) ? nFace / a2 : Vec3(0, 0, 1);
         } else {
             smoothF /= smoothFMag;
         }
@@ -542,7 +546,7 @@ void SphericalSlidingForceActuator<DataTypes>::buildConstraintMatrix(
             Real rn = std::sqrt(
                 (da_dtheta + db_dtheta) * (da_dtheta + db_dtheta)
                 + da_dtheta * da_dtheta + db_dtheta * db_dtheta);
-            m_rowNormTheta[i] = (rn > Real(1e-12)) ? rn : Real(1);
+            m_rowNormTheta[i] = (rn > s_squaredEpsilon) ? rn : Real(1);
             Real invNorm = Real(1.0) / m_rowNormTheta[i];
             MatrixDerivRowIterator row = matrix.writeLine(cIndex++);
             row.addCol(f[0], factor * smoothF * (-(da_dtheta + db_dtheta) * invNorm));
@@ -555,7 +559,7 @@ void SphericalSlidingForceActuator<DataTypes>::buildConstraintMatrix(
             Real rn = std::sqrt(
                 (da_dphi + db_dphi) * (da_dphi + db_dphi)
                 + da_dphi * da_dphi + db_dphi * db_dphi);
-            m_rowNormPhi[i] = (rn > Real(1e-12)) ? rn : Real(1);
+            m_rowNormPhi[i] = (rn > s_squaredEpsilon) ? rn : Real(1);
             Real invNorm = Real(1.0) / m_rowNormPhi[i];
             MatrixDerivRowIterator row = matrix.writeLine(cIndex++);
             row.addCol(f[0], factor * smoothF * (-(da_dphi + db_dphi) * invNorm));
@@ -575,7 +579,7 @@ void SphericalSlidingForceActuator<DataTypes>::getConstraintViolation(
     const ConstraintParams* cParams, BaseVector *resV, const BaseVector *Jdx)
 {
     SOFA_UNUSED(cParams); SOFA_UNUSED(Jdx);
-    unsigned int totalDim = m_nbContacts * 5;
+    unsigned int totalDim = m_nbContacts * s_rowsPerPoint;
     const auto& constraintId = sofa::helper::getReadAccessor(this->d_constraintIndex);
     for (unsigned int i = 0; i < totalDim; ++i)
         resV->set(constraintId + i, 0.);
@@ -610,15 +614,15 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
 
     for (unsigned int i = 0; i < m_nbContacts; ++i) {
         Real factor = this->d_jacobianScaleFactor.getValue();
-        Real Fx = lambda[i*5 + 0] * factor;
-        Real Fy = lambda[i*5 + 1] * factor;
-        Real Fz = lambda[i*5 + 2] * factor;
+        Real Fx = lambda[i*s_rowsPerPoint +0] * factor;
+        Real Fy = lambda[i*s_rowsPerPoint +1] * factor;
+        Real Fz = lambda[i*s_rowsPerPoint +2] * factor;
         // Denormalize sliding: QP lambda is in normalized space.
         // Physical dTheta = lambda_norm * factor / rowNorm.
-        Real rnT = (i < m_rowNormTheta.size() && m_rowNormTheta[i] > Real(1e-12)) ? m_rowNormTheta[i] : Real(1);
-        Real rnP = (i < m_rowNormPhi.size()   && m_rowNormPhi[i]   > Real(1e-12)) ? m_rowNormPhi[i]   : Real(1);
-        Real dTheta = lambda[i*5 + 3] * factor / rnT;
-        Real dPhi   = lambda[i*5 + 4] * factor / rnP;
+        Real rnT = (i < m_rowNormTheta.size() && m_rowNormTheta[i] > s_squaredEpsilon) ? m_rowNormTheta[i] : Real(1);
+        Real rnP = (i < m_rowNormPhi.size()   && m_rowNormPhi[i]   > s_squaredEpsilon) ? m_rowNormPhi[i]   : Real(1);
+        Real dTheta = lambda[i*s_rowsPerPoint +3] * factor / rnT;
+        Real dPhi   = lambda[i*s_rowsPerPoint +4] * factor / rnP;
 
         // ── Diagnostic print (every 10 steps) ──
         if (s_storeCount % 10 == 1) {
@@ -674,11 +678,11 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         }
 
         // Warm-start for next QP
-        this->m_lambdaInit[i*5 + 0] = currentForces[i][0];
-        this->m_lambdaInit[i*5 + 1] = currentForces[i][1];
-        this->m_lambdaInit[i*5 + 2] = currentForces[i][2];
-        this->m_lambdaInit[i*5 + 3] = 0.0;
-        this->m_lambdaInit[i*5 + 4] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerPoint +0] = currentForces[i][0];
+        this->m_lambdaInit[i*s_rowsPerPoint +1] = currentForces[i][1];
+        this->m_lambdaInit[i*s_rowsPerPoint +2] = currentForces[i][2];
+        this->m_lambdaInit[i*s_rowsPerPoint +3] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerPoint +4] = 0.0;
 
         // Apply damping
         dTheta *= damping;
@@ -775,7 +779,7 @@ void SphericalSlidingForceActuator<DataTypes>::draw(const VisualParams* vparams)
 
         Vec3 force = (i < this->d_currentForces.getValue().size())
                    ? this->d_currentForces.getValue()[i] : Vec3(0, 0, 0);
-        if (force.norm2() < Real(1e-12)) continue;
+        if (force.norm2() < s_squaredEpsilon) continue;
         Vec3 dir = force / force.norm();
         vparams->drawTool()->drawArrow(
             P - dir * std::log(force.norm() + 1) * this->d_visuScale.getValue(),

@@ -125,6 +125,15 @@ protected:
 
     sofa::Size                                   m_dim;
 
+    // Each active contact contributes 5 constraint rows:
+    //   indices [0, 1, 2] = force components (x, y, z)
+    //   indices [3, 4]    = sliding step in spherical coords (dTheta, dPhi)
+    static constexpr unsigned int s_rowsPerPoint = 5;
+
+    // Numerical tolerances; chosen empirically, tune if convergence issues arise.
+    static constexpr Real s_squaredEpsilon   = Real(1e-12); // for norm2() / squared-length / area checks AND division-by-zero guards
+    static constexpr Real s_fallbackForceMag = Real(1e-3);  // fallback magnitude when initForce is zero
+
     sofa::SingleLink<SphericalSlidingForceActuator<DataTypes>, sofa::core::topology::BaseMeshTopology, sofa::core::objectmodel::BaseLink::FLAG_STRONGLINK> d_topology;
 
     using Actuator<DataTypes>::m_state;
