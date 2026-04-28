@@ -119,7 +119,8 @@ bool SphericalSlidingForceActuator<DataTypes>::loadSparFile(const std::string& p
     }
 
     // Read theta_phi: nVerts x 2 x float64 (skip — we recompute from initTheta/initPhi)
-    file.seekg(nVerts * 2 * sizeof(double), std::ios::cur);
+    std::streamoff const offset = std::streamoff{nVerts} * 2 * std::streamoff{sizeof(double)};
+    file.seekg(offset, std::ios::cur);
 
     // Read faces: nFaces x 3 x uint32
     m_sparTriangles.resize(nFaces);
@@ -192,11 +193,11 @@ bool SphericalSlidingForceActuator<DataTypes>::findTriangleOnSphere(
     Real theta, Real phi,
     unsigned int& triIdx, Real& alpha, Real& beta) const
 {
-    Vec3 p_sph = sphericalToCart(theta, phi);
+    Vec3 const p_sph = sphericalToCart(theta, phi);
 
     // Linear scan — sufficient for ~8K triangles at init + once per storeResults
     Real bestDist = std::numeric_limits<Real>::max();
-    int bestTri = -1;
+    unsigned int bestTri = m_sparTriangles.size();  // sentinel: any value >= size means "not found"
     Real bestAlpha = 0, bestBeta = 0;
 
     for (unsigned int fi = 0; fi < m_sparTriangles.size(); ++fi) {
