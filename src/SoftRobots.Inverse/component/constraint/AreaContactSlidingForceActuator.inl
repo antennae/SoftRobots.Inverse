@@ -176,7 +176,7 @@ bool AreaContactSlidingForceActuator<DataTypes>::radialBarycentric(
 {
     Vec3 M = sofa::type::cross(v1 - v0, v2 - v0);
     Real M_dot_p = M * p_sph;
-    if (std::abs(M_dot_p) < Real(1e-30)) {
+    if (std::abs(M_dot_p) < s_squaredEpsilon) {
         alpha = beta = 0;
         return false;
     }
@@ -215,6 +215,8 @@ bool AreaContactSlidingForceActuator<DataTypes>::findTriangleOnSphere(
             continue;
 
         Real gamma = Real(1.0) - a - b;
+        // FP slack on barycentric containment: a/b/gamma can be slightly negative
+        // due to round-off when the ray hits exactly on an edge.
         if (a >= Real(-1e-8) && b >= Real(-1e-8) && gamma >= Real(-1e-8)) {
             triIdx = fi;
             alpha = a;
@@ -228,7 +230,7 @@ bool AreaContactSlidingForceActuator<DataTypes>::findTriangleOnSphere(
                   + ac * (m_sparVertices[f[1]] - m_sparVertices[f[0]])
                   + bc * (m_sparVertices[f[2]] - m_sparVertices[f[0]]);
         Real pnorm = proj.norm();
-        if (pnorm > Real(1e-30)) proj /= pnorm;
+        if (pnorm > s_squaredEpsilon) proj /= pnorm;
         Real dist = (proj - p_sph).norm();
         if (dist < bestDist) {
             bestDist = dist;
@@ -275,7 +277,7 @@ void AreaContactSlidingForceActuator<DataTypes>::computeSlidingJacobian(
 
     Vec3 M = sofa::type::cross(v1 - v0, v2 - v0);
     Real M_sq = M * M;
-    if (M_sq < Real(1e-30)) {
+    if (M_sq < s_squaredEpsilon) {
         da_dtheta = db_dtheta = da_dphi = db_dphi = 0;
         return;
     }
@@ -434,7 +436,7 @@ void AreaContactSlidingForceActuator<DataTypes>::initData()
     }
 
     // 6 DOFs per contact: px, py, pz, dTheta, dPhi, dR
-    this->m_dim = m_nbContacts * 6;
+    this->m_dim = m_nbContacts * s_rowsPerContact;
     this->m_nbLines = this->m_dim;
 
     // Initialize per-contact sliding state
@@ -475,8 +477,8 @@ void AreaContactSlidingForceActuator<DataTypes>::initData()
 
     // Lambda bounds
     this->m_lambdaInit.assign(this->m_dim, 0.0);
-    this->m_lambdaMax.assign(this->m_dim, 1e20);
-    this->m_lambdaMin.assign(this->m_dim, -1e20);
+    this->m_lambdaMax.assign(this->m_dim, std::numeric_limits<Real>::max());
+    this->m_lambdaMin.assign(this->m_dim, std::numeric_limits<Real>::lowest());
 
     // Initialize forces from face normal
     sofa::type::vector<Vec3> currentForces;
@@ -485,7 +487,7 @@ void AreaContactSlidingForceActuator<DataTypes>::initData()
         ReadAccessor<Data<VecCoord>> pos = this->m_state->readPositions();
         Vec3 f0 = this->d_initForce.getValue();
         Real fMag = f0.norm();
-        if (fMag == 0.0) fMag = Real(1e-3);
+        if (fMag == 0.0) fMag = s_fallbackForceMag;
         for (unsigned int i = 0; i < m_nbContacts; ++i) {
             unsigned int triIdx = m_currentTriSpar[i];
             if (triIdx < m_sparTriangles.size()) {
@@ -517,19 +519,19 @@ void AreaContactSlidingForceActuator<DataTypes>::initData()
                                da_dt, db_dt, da_dp, db_dp);
         Real rnT = std::sqrt((da_dt + db_dt) * (da_dt + db_dt) + da_dt * da_dt + db_dt * db_dt);
         Real rnP = std::sqrt((da_dp + db_dp) * (da_dp + db_dp) + da_dp * da_dp + db_dp * db_dp);
-        m_rowNormTheta[i] = (rnT > Real(1e-12)) ? rnT : Real(1);
-        m_rowNormPhi[i]   = (rnP > Real(1e-12)) ? rnP : Real(1);
+        m_rowNormTheta[i] = (rnT > s_squaredEpsilon) ? rnT : Real(1);
+        m_rowNormPhi[i]   = (rnP > s_squaredEpsilon) ? rnP : Real(1);
     }
 
     // Warm-start lambda
     this->m_hasLambdaInit = true;
     for (unsigned int i = 0; i < m_nbContacts; ++i) {
-        this->m_lambdaInit[i*6 + 0] = currentForces[i][0];
-        this->m_lambdaInit[i*6 + 1] = currentForces[i][1];
-        this->m_lambdaInit[i*6 + 2] = currentForces[i][2];
-        this->m_lambdaInit[i*6 + 3] = 0.0;  // dTheta
-        this->m_lambdaInit[i*6 + 4] = 0.0;  // dPhi
-        this->m_lambdaInit[i*6 + 5] = 0.0;  // dR
+        this->m_lambdaInit[i*s_rowsPerContact +0] = currentForces[i][0];
+        this->m_lambdaInit[i*s_rowsPerContact +1] = currentForces[i][1];
+        this->m_lambdaInit[i*s_rowsPerContact +2] = currentForces[i][2];
+        this->m_lambdaInit[i*s_rowsPerContact +3] = 0.0;  // dTheta
+        this->m_lambdaInit[i*s_rowsPerContact +4] = 0.0;  // dPhi
+        this->m_lambdaInit[i*s_rowsPerContact +5] = 0.0;  // dR
     }
 
     // Compute initial world-space locations
@@ -555,8 +557,8 @@ void AreaContactSlidingForceActuator<DataTypes>::initData()
 template<class DataTypes>
 void AreaContactSlidingForceActuator<DataTypes>::updateLimit()
 {
-    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : Real(1e20);
-    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : Real(-1e20);
+    Real maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : std::numeric_limits<Real>::max();
+    Real minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : std::numeric_limits<Real>::lowest();
     Real maxStep = this->d_maxStepSize.getValue();
     Real maxForceStep = this->d_maxForceStep.getValue();
     Real maxRadStep = this->d_maxRadiusStep.getValue();
@@ -566,23 +568,23 @@ void AreaContactSlidingForceActuator<DataTypes>::updateLimit()
     this->m_hasLambdaMin = true;
 
     Real factor = this->d_jacobianScaleFactor.getValue();
-    if (factor < Real(1e-12)) factor = Real(1);
+    if (factor < s_squaredEpsilon) factor = Real(1);
 
     for (unsigned int i = 0; i < m_nbContacts; ++i) {
         Vec3 curF = (i < currentForces.size()) ? currentForces[i] : Vec3(0, 0, 0);
 
         // Pressure bounds (rows 0-2)
         if (maxForceStep > 0.0) {
-            this->m_lambdaMin[i*6 + 0] = std::max(minF, curF[0] - maxForceStep);
-            this->m_lambdaMax[i*6 + 0] = std::min(maxF, curF[0] + maxForceStep);
-            this->m_lambdaMin[i*6 + 1] = std::max(minF, curF[1] - maxForceStep);
-            this->m_lambdaMax[i*6 + 1] = std::min(maxF, curF[1] + maxForceStep);
-            this->m_lambdaMin[i*6 + 2] = std::max(minF, curF[2] - maxForceStep);
-            this->m_lambdaMax[i*6 + 2] = std::min(maxF, curF[2] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerContact +0] = std::max(minF, curF[0] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerContact +0] = std::min(maxF, curF[0] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerContact +1] = std::max(minF, curF[1] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerContact +1] = std::min(maxF, curF[1] + maxForceStep);
+            this->m_lambdaMin[i*s_rowsPerContact +2] = std::max(minF, curF[2] - maxForceStep);
+            this->m_lambdaMax[i*s_rowsPerContact +2] = std::min(maxF, curF[2] + maxForceStep);
         } else {
-            this->m_lambdaMin[i*6 + 0] = minF; this->m_lambdaMax[i*6 + 0] = maxF;
-            this->m_lambdaMin[i*6 + 1] = minF; this->m_lambdaMax[i*6 + 1] = maxF;
-            this->m_lambdaMin[i*6 + 2] = minF; this->m_lambdaMax[i*6 + 2] = maxF;
+            this->m_lambdaMin[i*s_rowsPerContact +0] = minF; this->m_lambdaMax[i*s_rowsPerContact +0] = maxF;
+            this->m_lambdaMin[i*s_rowsPerContact +1] = minF; this->m_lambdaMax[i*s_rowsPerContact +1] = maxF;
+            this->m_lambdaMin[i*s_rowsPerContact +2] = minF; this->m_lambdaMax[i*s_rowsPerContact +2] = maxF;
         }
 
         // Sliding bounds (rows 3-4): scaled for normalized rows
@@ -590,15 +592,15 @@ void AreaContactSlidingForceActuator<DataTypes>::updateLimit()
         Real rnP = (i < m_rowNormPhi.size())   ? m_rowNormPhi[i]   : Real(1);
         Real boundT = maxStep * rnT / factor;
         Real boundP = maxStep * rnP / factor;
-        this->m_lambdaMin[i*6 + 3] = -boundT; this->m_lambdaMax[i*6 + 3] = boundT;
-        this->m_lambdaMin[i*6 + 4] = -boundP; this->m_lambdaMax[i*6 + 4] = boundP;
+        this->m_lambdaMin[i*s_rowsPerContact +3] = -boundT; this->m_lambdaMax[i*s_rowsPerContact +3] = boundT;
+        this->m_lambdaMin[i*s_rowsPerContact +4] = -boundP; this->m_lambdaMax[i*s_rowsPerContact +4] = boundP;
 
         // Radius bounds (row 5): scaled for normalized row
         // Uses m_rowNormR which is computed in recomputePatches (same value as
         // used for invNorm in buildConstraintMatrix, so errors cancel).
         Real rnR = (i < m_rowNormR.size()) ? m_rowNormR[i] : Real(1);
         Real boundR = maxRadStep * rnR / factor;
-        this->m_lambdaMin[i*6 + 5] = -boundR; this->m_lambdaMax[i*6 + 5] = boundR;
+        this->m_lambdaMin[i*s_rowsPerContact +5] = -boundR; this->m_lambdaMax[i*s_rowsPerContact +5] = boundR;
     }
 }
 
@@ -668,7 +670,7 @@ void AreaContactSlidingForceActuator<DataTypes>::buildConstraintMatrix(
                 Vec3(pos[centerF[1]]) - Vec3(pos[centerF[0]]),
                 Vec3(pos[centerF[2]]) - Vec3(pos[centerF[0]]));
             Real a2 = nFace.norm();
-            smoothF = (a2 > Real(1e-12)) ? nFace / a2 : Vec3(0, 0, 1);
+            smoothF = (a2 > s_squaredEpsilon) ? nFace / a2 : Vec3(0, 0, 1);
         } else {
             smoothF /= smoothFMag;
         }
@@ -678,7 +680,7 @@ void AreaContactSlidingForceActuator<DataTypes>::buildConstraintMatrix(
             Real rn = std::sqrt(
                 (da_dtheta + db_dtheta) * (da_dtheta + db_dtheta)
                 + da_dtheta * da_dtheta + db_dtheta * db_dtheta);
-            m_rowNormTheta[i] = (rn > Real(1e-12)) ? rn : Real(1);
+            m_rowNormTheta[i] = (rn > s_squaredEpsilon) ? rn : Real(1);
             Real invNorm = Real(1.0) / m_rowNormTheta[i];
             MatrixDerivRowIterator row = matrix.writeLine(cIndex++);
             // No area because it is normalized
@@ -692,7 +694,7 @@ void AreaContactSlidingForceActuator<DataTypes>::buildConstraintMatrix(
             Real rn = std::sqrt(
                 (da_dphi + db_dphi) * (da_dphi + db_dphi)
                 + da_dphi * da_dphi + db_dphi * db_dphi);
-            m_rowNormPhi[i] = (rn > Real(1e-12)) ? rn : Real(1);
+            m_rowNormPhi[i] = (rn > s_squaredEpsilon) ? rn : Real(1);
             Real invNorm = Real(1.0) / m_rowNormPhi[i];
             MatrixDerivRowIterator row = matrix.writeLine(cIndex++);
             // No area because it is normalized
@@ -740,7 +742,7 @@ void AreaContactSlidingForceActuator<DataTypes>::getConstraintViolation(
     const ConstraintParams* cParams, BaseVector *resV, const BaseVector *Jdx)
 {
     SOFA_UNUSED(cParams); SOFA_UNUSED(Jdx);
-    unsigned int totalDim = m_nbContacts * 6;
+    unsigned int totalDim = m_nbContacts * s_rowsPerContact;
     const auto& constraintId = sofa::helper::getReadAccessor(this->d_constraintIndex);
     for (unsigned int i = 0; i < totalDim; ++i)
         resV->set(constraintId + i, 0.);
@@ -764,19 +766,19 @@ void AreaContactSlidingForceActuator<DataTypes>::storeResults(
         Real factor = this->d_jacobianScaleFactor.getValue();
 
         // Extract pressure
-        Real px = lambda[i*6 + 0] * factor;
-        Real py = lambda[i*6 + 1] * factor;
-        Real pz = lambda[i*6 + 2] * factor;
+        Real px = lambda[i*s_rowsPerContact +0] * factor;
+        Real py = lambda[i*s_rowsPerContact +1] * factor;
+        Real pz = lambda[i*s_rowsPerContact +2] * factor;
 
         // Denormalize sliding
-        Real rnT = (i < m_rowNormTheta.size() && m_rowNormTheta[i] > Real(1e-12)) ? m_rowNormTheta[i] : Real(1);
-        Real rnP = (i < m_rowNormPhi.size()   && m_rowNormPhi[i]   > Real(1e-12)) ? m_rowNormPhi[i]   : Real(1);
-        Real dTheta = lambda[i*6 + 3] * factor / rnT;
-        Real dPhi   = lambda[i*6 + 4] * factor / rnP;
+        Real rnT = (i < m_rowNormTheta.size() && m_rowNormTheta[i] > s_squaredEpsilon) ? m_rowNormTheta[i] : Real(1);
+        Real rnP = (i < m_rowNormPhi.size()   && m_rowNormPhi[i]   > s_squaredEpsilon) ? m_rowNormPhi[i]   : Real(1);
+        Real dTheta = lambda[i*s_rowsPerContact +3] * factor / rnT;
+        Real dPhi   = lambda[i*s_rowsPerContact +4] * factor / rnP;
 
         // Denormalize radius
-        Real rnR = (i < m_rowNormR.size() && m_rowNormR[i] > Real(1e-12)) ? m_rowNormR[i] : Real(1);
-        Real dR = lambda[i*6 + 5] * factor / rnR;
+        Real rnR = (i < m_rowNormR.size() && m_rowNormR[i] > s_squaredEpsilon) ? m_rowNormR[i] : Real(1);
+        Real dR = lambda[i*s_rowsPerContact +5] * factor / rnR;
 
         if (std::isnan(px + py + pz + dTheta + dPhi + dR)) continue;
 
@@ -806,12 +808,12 @@ void AreaContactSlidingForceActuator<DataTypes>::storeResults(
         }
 
         // Warm-start lambda for next QP
-        this->m_lambdaInit[i*6 + 0] = currentForces[i][0];
-        this->m_lambdaInit[i*6 + 1] = currentForces[i][1];
-        this->m_lambdaInit[i*6 + 2] = currentForces[i][2];
-        this->m_lambdaInit[i*6 + 3] = 0.0;
-        this->m_lambdaInit[i*6 + 4] = 0.0;
-        this->m_lambdaInit[i*6 + 5] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerContact +0] = currentForces[i][0];
+        this->m_lambdaInit[i*s_rowsPerContact +1] = currentForces[i][1];
+        this->m_lambdaInit[i*s_rowsPerContact +2] = currentForces[i][2];
+        this->m_lambdaInit[i*s_rowsPerContact +3] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerContact +4] = 0.0;
+        this->m_lambdaInit[i*s_rowsPerContact +5] = 0.0;
 
         // Apply damping to sliding
         dTheta *= damping;
@@ -906,11 +908,11 @@ void AreaContactSlidingForceActuator<DataTypes>::draw(const VisualParams* vparam
             if (f[0] >= pos.size() || f[1] >= pos.size() || f[2] >= pos.size()) continue;
             Vec3 v0(pos[f[0]]), v1(pos[f[1]]), v2(pos[f[2]]);
             Real A = m_triAreas[pt.triIdx];
-            Real C = (A > Real(1e-12)) ? pt.weight / A : Real(0);  // recover C from stored C*A
+            Real C = (A > s_squaredEpsilon) ? pt.weight / A : Real(0);  // recover C from stored C*A
             sofa::type::RGBAColor color(1.0f - float(C), float(C), 0.0f, 0.4f);
             Vec3 n = sofa::type::cross(v1 - v0, v2 - v0);
             Real nl = n.norm();
-            if (nl > Real(1e-12)) n /= nl;
+            if (nl > s_squaredEpsilon) n /= nl;
             vparams->drawTool()->drawTriangle(v0, v1, v2, n, color);
         }
 
@@ -920,7 +922,7 @@ void AreaContactSlidingForceActuator<DataTypes>::draw(const VisualParams* vparam
         // 3. Current force vector: blue arrow from center
         Vec3 forceDir = (i < m_smoothForces.size()) ? m_smoothForces[i] : Vec3(0,0,0);
         Real fMag = forceDir.norm();
-        if (fMag < Real(1e-12)) continue;
+        if (fMag < s_squaredEpsilon) continue;
         Real scale = d_visuScale.getValue();
         vparams->drawTool()->drawArrow(
             center,

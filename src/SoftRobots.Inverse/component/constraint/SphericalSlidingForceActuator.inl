@@ -523,8 +523,6 @@ void SphericalSlidingForceActuator<DataTypes>::buildConstraintMatrix(
         Vec3 smoothF = (m_smoothForces.size() > i)
                      ? m_smoothForces[i] : Vec3(0, 0, 0);
         Real const smoothFMag = smoothF.norm();
-        // Practical "no usable force direction" threshold; below this, fall back to face normal.
-        // Looser than s_squaredEpsilon because we're testing a force magnitude, not numerical zero.
         if (smoothFMag < Real(1e-6)) {
             // Fall back to face normal on deformed mesh
             Vec3 const nFace = sofa::type::cross(

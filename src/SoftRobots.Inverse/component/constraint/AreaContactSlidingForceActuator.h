@@ -160,6 +160,16 @@ protected:
 
     sofa::Size                                   m_dim;
 
+    // Each active contact contributes 6 constraint rows:
+    //   indices [0, 1, 2] = pressure components (px, py, pz)
+    //   indices [3, 4]    = sliding step in spherical coords (dTheta, dPhi)
+    //   index   [5]       = radius step (dR)
+    static constexpr unsigned int s_rowsPerContact = 6;
+
+    // Numerical tolerances; chosen empirically, tune if convergence issues arise.
+    static constexpr Real s_squaredEpsilon   = Real(1e-12); // for norm2() / squared-length / area checks AND division-by-zero guards
+    static constexpr Real s_fallbackForceMag = Real(1e-3);  // fallback magnitude when initForce is zero
+
     sofa::SingleLink<AreaContactSlidingForceActuator<DataTypes>, sofa::core::topology::BaseMeshTopology, sofa::core::objectmodel::BaseLink::FLAG_STRONGLINK> d_topology;
 
     using Actuator<DataTypes>::m_state;

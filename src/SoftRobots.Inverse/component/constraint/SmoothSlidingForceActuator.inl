@@ -249,8 +249,6 @@ void SmoothSlidingForceActuator<DataTypes>::buildConstraintMatrix(const Constrai
                                    ? this->m_smoothForces[i]
                                    : sofa::type::Vec3(0, 0, 0);
         Real const smoothFMag = smoothF.norm();
-        // Practical "no usable force direction" threshold; below this, fall back to face normal.
-        // Looser than s_squaredEpsilon because we're testing a force magnitude, not numerical zero.
         if (smoothFMag < 1e-6) {
             // Fall back to face normal
             sofa::type::Vec3 const nFace = sofa::type::cross(
