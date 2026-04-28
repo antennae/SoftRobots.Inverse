@@ -133,7 +133,8 @@ bool AreaContactSlidingForceActuator<DataTypes>::loadSparFile(const std::string&
     }
 
     // Skip theta_phi block
-    file.seekg(nVerts * 2 * sizeof(double), std::ios::cur);
+    std::streamoff const offset = std::streamoff{nVerts} * 2 * std::streamoff{sizeof(double)};
+    file.seekg(offset, std::ios::cur);
 
     m_sparTriangles.resize(nFaces);
     for (uint32_t i = 0; i < nFaces; ++i) {
@@ -204,7 +205,7 @@ bool AreaContactSlidingForceActuator<DataTypes>::findTriangleOnSphere(
     Vec3 p_sph = sphericalToCart(theta, phi);
 
     Real bestDist = std::numeric_limits<Real>::max();
-    int bestTri = -1;
+    unsigned int bestTri = m_sparTriangles.size();  // sentinel: any value >= size means "not found"
     Real bestAlpha = 0, bestBeta = 0;
 
     for (unsigned int fi = 0; fi < m_sparTriangles.size(); ++fi) {
