@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <algorithm>
 #include <limits>
 
@@ -174,7 +173,10 @@ bool SphericalSlidingForceActuator<DataTypes>::radialBarycentric(
     Vec3 const p_plane = p_sph * t;
     Real const M_sq = M * M;
 
-    // alpha, beta via Eq. 7
+    // Barycentric coords of p_plane w.r.t. (v0, v1, v2):
+    // alpha = signed area of sub-triangle (p_plane, v0, v2) / area of full triangle,
+    // beta  = signed area of sub-triangle (v0, p_plane, v2) / area of full triangle.
+    // Ratio of M-projected cross products over |M|² cancels the common (2*area) factor.
     alpha = (M * sofa::type::cross(p_plane - v0, v2 - v0)) / M_sq;
     beta  = (M * sofa::type::cross(v1 - v0, p_plane - v0)) / M_sq;
     return true;
@@ -651,7 +653,9 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         m_currentTheta[i] += dTheta;
         m_currentPhi[i]   += dPhi;
 
-        // Clamp theta to (epsilon, pi - epsilon) to avoid pole singularity
+        // Clamp theta away from poles: sin(theta)=0 at 0 and pi makes dP_dphi=(0,0,0),
+        // collapsing the phi Jacobian row. 1e-4 rad (~0.006°) keeps sin(theta) > 1e-4
+        // while leaving the full sphere accessible in practice.
         const Real eps = Real(1e-4);
         m_currentTheta[i] = std::max(eps, std::min(Real(M_PI) - eps, m_currentTheta[i]));
 

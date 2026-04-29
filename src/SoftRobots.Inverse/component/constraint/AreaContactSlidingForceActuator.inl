@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <algorithm>
 #include <limits>
 
@@ -380,6 +379,9 @@ void AreaContactSlidingForceActuator<DataTypes>::recomputePatches(const VecCoord
                 wB = m_currentAlpha[i];
                 wC = m_currentBeta[i];
             } else {
+                // Approximation: only the center triangle has a precise (alpha,beta).
+                // Outer patch triangles use centroid weights — error is small when
+                // patch triangles are small relative to the contact radius.
                 wA = wB = wC = Real(1.0) / Real(3.0);
             }
             Real const g = pt.dCdr;
@@ -645,6 +647,7 @@ void AreaContactSlidingForceActuator<DataTypes>::buildConstraintMatrix(
                     wB = m_currentAlpha[i];
                     wC = m_currentBeta[i];
                 } else {
+                    // Approximation: centroid weights for non-center patch triangles.
                     wA = wB = wC = Real(1.0) / Real(3.0);
                 }
                 Real const g = factor * pt.weight;  // factor * C * A
@@ -722,6 +725,7 @@ void AreaContactSlidingForceActuator<DataTypes>::buildConstraintMatrix(
                     pwB = m_currentAlpha[i];
                     pwC = m_currentBeta[i];
                 } else {
+                    // Approximation: centroid weights for non-center patch triangles.
                     pwA = pwB = pwC = Real(1.0) / Real(3.0);
                 }
                 Real const g = factor * pt.dCdr * invNorm;

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_set>
-#include <iostream>
 #include <limits>
 
 #include <SoftRobots.Inverse/component/constraint/SlidingForceActuator.h>
@@ -248,9 +246,6 @@ void SlidingForceActuator<DataTypes>::updateLimit()
                  
              }
         }                                                                                                                
-        Real jacobianScale = currentForce.norm();                                                                 
-        if (jacobianScale < s_normEpsilon) jacobianScale = 1.0;   
-
         // Force bounds (Indices 0, 1, 2)
         if (maxForceStep > 0.0)
         {
@@ -271,14 +266,12 @@ void SlidingForceActuator<DataTypes>::updateLimit()
             m_lambdaMax[i*s_rowsPerPoint + 2] = maxF;
         }
         
-        // Sliding bounds (Indices 3, 4) - SCALED Bounds for Cartesian dU, dV
-        Real const scaledStep = step  ; //* jacobianScale;
-        
-        m_lambdaMin[i*s_rowsPerPoint + 3] = -scaledStep;
-        m_lambdaMax[i*s_rowsPerPoint + 3] = scaledStep;
-        
-        m_lambdaMin[i*s_rowsPerPoint + 4] = -scaledStep;
-        m_lambdaMax[i*s_rowsPerPoint + 4] = scaledStep;
+        // Sliding bounds (Indices 3, 4): lambda maps directly to Cartesian dU/dV in mm.
+        // Rows 3,4 use scaledGradient (unit force direction), so no jacobianScale factor here.
+        m_lambdaMin[i*s_rowsPerPoint + 3] = -step;
+        m_lambdaMax[i*s_rowsPerPoint + 3] = step;
+        m_lambdaMin[i*s_rowsPerPoint + 4] = -step;
+        m_lambdaMax[i*s_rowsPerPoint + 4] = step;
     }
 }
 
@@ -377,9 +370,12 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         rowFz.addCol(tri[2], factor * Deriv(0, 0, weightC));
         
         // --- Rows 3, 4: Sliding (dU, dV) in Cartesian Tangent Plane ---
+        // Forward map: [U; V] = [v1x, v2x; 0, v2y] * [wB; wC]
+        // (lower-left 0 because e1 = v1/|v1|, so v1·e2 = 0)
+        // Inverse gives d(wB,wC)/d(U,V):
         Real const du_dU = 1.0 / v1x;
         Real const du_dV = -v2x / det;
-        Real const dv_dU = 0.0;
+        Real const dv_dU = 0.0;       // upper-triangular inverse: exact zero
         Real const dv_dV = 1.0 / v2y;
 
         // Row 3: Sliding U (dU)
@@ -486,14 +482,7 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
 {
     SOFA_UNUSED(delta);
 
-    // std::cout<<"SlidingForceActuator::storeResults - Lambda: ";
-    // for (auto i: lambda)
-    //     std::cout<<i<<", ";
-    // std::cout<<std::endl;
-
     unsigned int const n_triangles = m_activeTriangles.size();
-    // unsigned int startId = d_constraintIndex.getValue();
-    
     if (!d_topology.get() || !m_state) return;
     const auto& triangles = d_topology.get()->getTriangles();
     ReadAccessor<Data<VecCoord>> const pos = m_state->readPositions();
@@ -537,17 +526,6 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
             
             gradientForce = n * scale;
         }
-        Real jacobianScale = gradientForce.norm();
-        if (jacobianScale < s_normEpsilon) jacobianScale = 1.0;
-        
-        // DECODING: Recover physical step (Cartesian distance in tangent plane)
-        // dU /= jacobianScale;
-        // dV /= jacobianScale;
-
-        // Apply sliding multiplication factor to restore physical units
-        // dU *= d_jacobianScaleFactor.getValue();
-        // dV *= d_jacobianScaleFactor.getValue();
-
         // Safety check 1: Detect NaN/Inf
         if (std::isnan(Fx) || std::isnan(Fy) || std::isnan(Fz) || std::isnan(dU) || std::isnan(dV) ||
             std::isinf(Fx) || std::isinf(Fy) || std::isinf(Fz) || std::isinf(dU) || std::isinf(dV)) {
@@ -629,8 +607,6 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         d_currentLocation.setValue(currentLocations);
     }
 
-    // std::cout << "Current Location "<<d_currentLocation.getValue()[0] << std::endl;
-    
     updateLimit(); // Important for bounds!
     
     // Base class storeResults handles delta

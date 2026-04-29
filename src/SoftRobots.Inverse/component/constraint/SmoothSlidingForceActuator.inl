@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_set>
-#include <iostream>
 #include <limits>
 
 #include <SoftRobots.Inverse/component/constraint/SmoothSlidingForceActuator.h>
@@ -201,6 +199,7 @@ void SmoothSlidingForceActuator<DataTypes>::getBarycentricCoords(
     Real const d20 = v2 * v0;
     Real const d21 = v2 * v1;
     Real const denom = d00 * d11 - d01 * d01;
+    // Degenerate triangle: fall back to centroid — safest interior point.
     if (std::abs(denom) < s_squaredEpsilon) { wB = 1.0/3; wC = 1.0/3; return; }
     wB = (d11 * d20 - d01 * d21) / denom;
     wC = (d00 * d21 - d01 * d20) / denom;
@@ -319,7 +318,9 @@ void SmoothSlidingForceActuator<DataTypes>::projectToMesh(unsigned int& triIdx, 
     Real newWB, newWC;
     getBarycentricCoords(sofa::type::Vec3(pos[bt[0]]), sofa::type::Vec3(pos[bt[1]]),
                          sofa::type::Vec3(pos[bt[2]]), bestClose, newWB, newWC);
-    // Clamp to valid range
+    // Clamp to valid barycentric range [0,1].
+    // Proportional scaling (not independent clamping) keeps the point on the
+    // opposite edge rather than snapping it to a corner.
     newWB = std::max(Real(0), newWB);
     newWC = std::max(Real(0), newWC);
     if (newWB + newWC > 1.0) { Real const s = 1.0 / (newWB + newWC); newWB *= s; newWC *= s; }
