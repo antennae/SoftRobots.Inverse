@@ -15,13 +15,18 @@ namespace softrobotsinverse::constraint
     using sofa::core::ConstVecCoordId;
 
 /**
- * This component applies a force on a surface and allows the solver to "slide" the force
- * to a better location by optimizing barycentric coordinates (u, v).
- * 
- * It constructs a local linearization of the contact problem:
- * - Variable 0: Normal Force Magnitude
- * - Variable 1: Step along U (barycentric)
- * - Variable 2: Step along V (barycentric)
+ * Applies a force at a point on a mesh and allows the inverse solver to "slide"
+ * the contact location by optimizing barycentric coordinates (u, v) each step.
+ *
+ * 5 constraint rows per active point:
+ *   rows [0, 1, 2]  — force (Fx, Fy, Fz)
+ *   rows [3, 4]     — sliding step (dU, dV) in the triangle's tangent plane
+ *
+ * The tangent frame is the per-triangle flat frame (T1, T2 derived from the
+ * triangle edges). For a smoother frame that does not flip at edges, see
+ * SmoothSlidingForceActuator.
+ *
+ * Requires a mesh topology (link "topology") with at least one triangle.
  */
 template< class DataTypes >
 class SlidingForceActuator : public Actuator<DataTypes>

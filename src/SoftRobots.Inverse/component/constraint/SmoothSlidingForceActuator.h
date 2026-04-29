@@ -15,10 +15,21 @@ namespace softrobotsinverse::constraint
     using sofa::core::ConstVecCoordId;
 
 /**
- * SmoothSlidingForceActuator: 
- * Applies a force that can slide across a mesh using SMOOTH vertex normals.
- * This version uses 2 sliding variables (dU, dV) in a tangent plane that varies 
- * continuously across triangles, preventing chattering at edges.
+ * Applies a force at a point on a mesh and allows the inverse solver to slide
+ * the contact location, using smooth (EMA-averaged) per-vertex normals for the
+ * tangent frame. The continuous tangent field eliminates the Jacobian
+ * discontinuities that occur at triangle edges in SlidingForceActuator.
+ *
+ * 5 constraint rows per active point:
+ *   rows [0, 1, 2]  — force (Fx, Fy, Fz)
+ *   rows [3, 4]     — sliding step (dU, dV) in the smooth tangent plane
+ *
+ * The smooth normal is interpolated barycentrically from per-vertex normals,
+ * which are themselves the area-weighted average of incident face normals.
+ * An EMA (exponential moving average) can be enabled via d_dirMomentum and
+ * d_slideMomentum to further dampen transient oscillations.
+ *
+ * Requires a mesh topology (link "topology") with at least one triangle.
  */
 template< class DataTypes >
 class SmoothSlidingForceActuator : public Actuator<DataTypes>
