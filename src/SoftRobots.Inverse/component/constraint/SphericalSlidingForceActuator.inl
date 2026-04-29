@@ -54,12 +54,6 @@ SphericalSlidingForceActuator<DataTypes>::SphericalSlidingForceActuator(Mechanic
                              "EMA momentum for force direction (0=off, ~0.7=smooth)"))
     , d_slideMomentum(initData(&d_slideMomentum, Real(0.0), "slideMomentum",
                                "EMA momentum for QP sliding output (0=off, ~0.5-0.8=smooth)"))
-    , d_annealRate(initData(&d_annealRate, Real(0.0), "annealRate",
-                            "Damping annealing rate: 0=off, >0 ramps damping from stepDamping to 1.0 with time constant annealRate steps"))
-    , d_stagnationWindow(initData(&d_stagnationWindow, (unsigned int)(0), "stagnationWindow",
-                                  "Steps of small sliding before perturbation kick (0=off)"))
-    , d_perturbRadius(initData(&d_perturbRadius, Real(0.3), "perturbRadius",
-                               "Perturbation magnitude in radians when stagnation detected"))
     , d_currentForces(initData(&d_currentForces, "currentForces",
                                "Current forces applied"))
     , d_currentLocation(initData(&d_currentLocation, "currentLocation",
@@ -393,8 +387,6 @@ void SphericalSlidingForceActuator<DataTypes>::initData()
     // Initialize sliding momentum accumulators
     m_slideMomentumTheta.assign(m_nbContacts, Real(0));
     m_slideMomentumPhi.assign(m_nbContacts, Real(0));
-    m_stagnationCount.assign(m_nbContacts, 0);
-    m_stepCount = 0;
 
     // Compute initial row norms from initial (theta, phi)
     m_rowNormTheta.assign(m_nbContacts, Real(1));
@@ -595,18 +587,6 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
     WriteAccessor<Data<sofa::type::vector<Vec3>>> currentForces = this->d_currentForces;
     Real const baseDamping = this->d_stepDamping.getValue();
     Real const maxStep = this->d_maxStepSize.getValue();
-    Real const annealRate = this->d_annealRate.getValue();
-    unsigned int const stagnationWindow = this->d_stagnationWindow.getValue();
-    Real const perturbRadius = this->d_perturbRadius.getValue();
-
-    ++m_stepCount;
-
-    // [Claude 2026-04-06] Annealing: ramp damping from baseDamping toward 1.0
-    // damping(t) = 1.0 - (1.0 - baseDamping) * exp(-t / annealRate)
-    Real damping = baseDamping;
-    if (annealRate > Real(0)) {
-        damping = Real(1.0) - (Real(1.0) - baseDamping) * std::exp(-Real(m_stepCount) / annealRate);
-    }
 
     static unsigned int s_storeCount = 0;
     ++s_storeCount;
@@ -684,8 +664,8 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         this->m_lambdaInit[i*s_rowsPerPoint +4] = 0.0;
 
         // Apply damping
-        dTheta *= damping;
-        dPhi   *= damping;
+        dTheta *= baseDamping;
+        dPhi   *= baseDamping;
 
         // Clamp step magnitude (radians)
         Real const stepMag = std::sqrt(dTheta * dTheta + dPhi * dPhi);
@@ -698,29 +678,6 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         // Update spherical coordinates
         m_currentTheta[i] += dTheta;
         m_currentPhi[i]   += dPhi;
-
-        // [Claude 2026-04-06] Stagnation detection + random perturbation
-        if (stagnationWindow > 0 && i < m_stagnationCount.size()) {
-            Real const stepMagAfter = std::sqrt(dTheta * dTheta + dPhi * dPhi);
-            if (stepMagAfter < maxStep * Real(0.01)) {
-                m_stagnationCount[i]++;
-            } else {
-                m_stagnationCount[i] = 0;
-            }
-            if (m_stagnationCount[i] >= stagnationWindow) {
-                // Random perturbation seeded from step count + contact index
-                unsigned int seed = m_stepCount * 31 + i * 7;
-                Real const rTheta = perturbRadius * (Real(2.0) * Real(seed % 1000) / Real(999) - Real(1.0));
-                seed = seed * 1103515245 + 12345;
-                Real const rPhi   = perturbRadius * (Real(2.0) * Real(seed % 1000) / Real(999) - Real(1.0));
-                m_currentTheta[i] += rTheta;
-                m_currentPhi[i]   += rPhi;
-                m_stagnationCount[i] = 0;
-                // Reset momentum to avoid snapping back
-                m_slideMomentumTheta[i] = Real(0);
-                m_slideMomentumPhi[i]   = Real(0);
-            }
-        }
 
         // Clamp theta to (epsilon, pi - epsilon) to avoid pole singularity
         const Real eps = Real(1e-4);
