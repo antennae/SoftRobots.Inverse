@@ -604,12 +604,12 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         Real dPhi   = lambda[i*s_rowsPerPoint +4] * factor / rnP;
 
         // ── Diagnostic print (every 10 steps) ──
-        if (s_storeCount % 10 == 1) {
-            Real da_dt, db_dt, da_dp, db_dp;
-            computeSlidingJacobian(m_currentTriSpar[i], m_currentTheta[i], m_currentPhi[i],
-                                   da_dt, db_dt, da_dp, db_dp);
-            Vec3 const sF = (m_smoothForces.size() > i) ? m_smoothForces[i] : Vec3(0,0,0);
-            Real const sFMag = sF.norm();
+        // if (s_storeCount % 10 == 1) {
+        //     Real da_dt, db_dt, da_dp, db_dp;
+        //     computeSlidingJacobian(m_currentTriSpar[i], m_currentTheta[i], m_currentPhi[i],
+        //                            da_dt, db_dt, da_dp, db_dp);
+        //     Vec3 const sF = (m_smoothForces.size() > i) ? m_smoothForces[i] : Vec3(0,0,0);
+        //     Real const sFMag = sF.norm();
             // std::cout << "[SPAR step=" << s_storeCount << " c=" << i << "] "
             //           << "tri=" << m_currentTriSpar[i]
             //           << " theta=" << m_currentTheta[i] << " phi=" << m_currentPhi[i]
@@ -626,7 +626,7 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
             //           << ") |smoothF|=" << sFMag
             //           << "\n  pos=" << sphericalToMesh(m_currentTriSpar[i], m_currentAlpha[i], m_currentBeta[i], pos.ref())
             //           << std::endl;
-        }
+        // }
 
         if (std::isnan(Fx + Fy + Fz + dTheta + dPhi)) continue;
 
