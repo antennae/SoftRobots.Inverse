@@ -660,9 +660,12 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         if (m_currentPhi[i] < 0) m_currentPhi[i] += Real(2.0 * M_PI);
 
         // Recompute triangle + barycentric on S^Par
-        findTriangleOnSphere(m_currentTheta[i], m_currentPhi[i],
-                             m_currentTriSpar[i],
-                             m_currentAlpha[i], m_currentBeta[i]);
+        if (!findTriangleOnSphere(m_currentTheta[i], m_currentPhi[i],
+                                  m_currentTriSpar[i],
+                                  m_currentAlpha[i], m_currentBeta[i]))
+            msg_warning() << "Contact " << i << ": lost S^Par triangle mapping at "
+                          << "theta=" << m_currentTheta[i] << " phi=" << m_currentPhi[i]
+                          << " — Jacobian may be stale this step.";
     }
 
     // Compute world-space contact locations from deformed mesh
