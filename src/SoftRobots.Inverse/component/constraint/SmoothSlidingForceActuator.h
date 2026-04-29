@@ -72,12 +72,6 @@ public:
     void storeResults(sofa::type::vector<double> &lambda,
                       sofa::type::vector<double> &delta) override;
 
-    void getBarycentricCoords(const sofa::type::Vec3& A,
-                                         const sofa::type::Vec3& B,
-                                         const sofa::type::Vec3& C,
-                                         const sofa::type::Vec3& P,
-                                         Real& wB, Real& wC);   
-
 protected:
     // Data Inputs
     sofa::Data<sofa::type::vector<unsigned int>> d_triangleIndices; 
@@ -138,6 +132,11 @@ protected:
     void updateLimit();
     void updateVertexNormals();
     void projectToMesh(unsigned int& triIdx, sofa::type::Vec3& localCoords);
+    void getBarycentricCoords(const sofa::type::Vec3& A,
+                              const sofa::type::Vec3& B,
+                              const sofa::type::Vec3& C,
+                              const sofa::type::Vec3& P,
+                              Real& wB, Real& wC);
 
 public:
     Real getEpsilonSliding() const { return d_epsilonSliding.getValue(); }
