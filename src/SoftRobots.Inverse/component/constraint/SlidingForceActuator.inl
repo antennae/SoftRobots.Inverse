@@ -208,8 +208,6 @@ void SlidingForceActuator<DataTypes>::initData()
         }
         d_currentLocation.setValue(currentLocations);
     }
-
-    updateLimit();
 }
 
 template<class DataTypes>
