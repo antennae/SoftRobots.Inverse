@@ -507,22 +507,6 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
 
         const Triangle& tri = triangles[triangleIdx];
 
-        // sofa::type::Vec3 const currentForce = currentForces[i];
-        // sofa::type::Vec3 gradientForce = currentForce;
-
-        // // Handle vanishing gradients when force is zero.
-        // if (gradientForce.norm2() < s_squaredEpsilon) {
-        //     const Coord& A = pos[tri[0]];
-        //     const Coord& B = pos[tri[1]];
-        //     const Coord& C = pos[tri[2]];
-        //     sofa::type::Vec3 n = sofa::type::cross(B-A, C-A);
-        //     n.normalize();
-            
-        //     Real scale = 1.0;
-        //     if (d_initForce.isSet() && d_initForce.getValue().norm() > s_normEpsilon) scale = d_initForce.getValue().norm();
-            
-        //     gradientForce = n * scale;
-        // }
         // Safety check 1: Detect NaN/Inf
         if (std::isnan(Fx) || std::isnan(Fy) || std::isnan(Fz) || std::isnan(dU) || std::isnan(dV) ||
             std::isinf(Fx) || std::isinf(Fy) || std::isinf(Fz) || std::isinf(dU) || std::isinf(dV)) {
