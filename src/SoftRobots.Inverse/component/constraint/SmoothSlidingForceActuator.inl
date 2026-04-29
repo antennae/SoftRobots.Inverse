@@ -25,7 +25,7 @@ SmoothSlidingForceActuator<DataTypes>::SmoothSlidingForceActuator(MechanicalStat
     , d_initForce(initData(&d_initForce, Vec3(0.0, 0.0, 0.0), "initForce", "Initial force guess"))
     , d_maxForceStep(initData(&d_maxForceStep, Real(0.0), "maxForceStep", "Max change in force magnitude per iteration (0 = no limit)"))
     , d_maxStepSize(initData(&d_maxStepSize, Real(0.1), "maxStepSize", "Max sliding step in mm per iteration"))
-    , d_stepDamping(initData(&d_stepDamping, Real(0.5), "stepDamping", "Damping factor for sliding step (0.1). Lower reduces jitter."))
+    , d_stepDamping(initData(&d_stepDamping, Real(0.5), "stepDamping", "Damping factor for sliding step [0,1]. Default 0.5; lower reduces jitter."))
     , d_epsilonForce(initData(&d_epsilonForce, Real(1e-3), "epsilonForce", "Regularization for force constraint."))
     , d_epsilonSliding(initData(&d_epsilonSliding, Real(1e-3), "epsilonSliding", "Regularization for sliding constraint."))
     , d_ridgeForce(initData(&d_ridgeForce, Real(1e-12), "ridgeForce", "Ridge for force variable."))
