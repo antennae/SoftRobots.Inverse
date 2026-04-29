@@ -342,13 +342,20 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
 
+    unsigned int rowBase = 0;
     for(unsigned int i=0; i<nbPoints; i++) {
+        unsigned int const triIdx = this->m_activeTriangles[i];
+        // Mirror the skip in buildConstraintMatrix so rowBase stays in sync.
+        if (triIdx >= triangles.size()) continue;
+
         Real const factor = this->d_jacobianScaleFactor.getValue();
-        Real const Fx = lambda[i*s_rowsPerPoint +0] * factor;
-        Real const Fy = lambda[i*s_rowsPerPoint +1] * factor;
-        Real const Fz = lambda[i*s_rowsPerPoint +2] * factor;
-        Real dwB = lambda[i*s_rowsPerPoint +3] * factor;
-        Real dwC = lambda[i*s_rowsPerPoint +4] * factor;
+        unsigned int const rowStart = rowBase;
+        rowBase += s_rowsPerPoint;  // advance before any inner continue
+        Real const Fx = lambda[rowStart +0] * factor;
+        Real const Fy = lambda[rowStart +1] * factor;
+        Real const Fz = lambda[rowStart +2] * factor;
+        Real dwB = lambda[rowStart +3] * factor;
+        Real dwC = lambda[rowStart +4] * factor;
         if (std::isnan(Fx + Fy + Fz + dwB + dwC)) continue;
 
         // Update force
@@ -363,11 +370,11 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
             this->m_smoothForces[i] = currentForces[i];
 
         // Warm-start for next QP
-        this->m_lambdaInit[i*s_rowsPerPoint +0] = currentForces[i][0];
-        this->m_lambdaInit[i*s_rowsPerPoint +1] = currentForces[i][1];
-        this->m_lambdaInit[i*s_rowsPerPoint +2] = currentForces[i][2];
-        this->m_lambdaInit[i*s_rowsPerPoint +3] = 0.0;
-        this->m_lambdaInit[i*s_rowsPerPoint +4] = 0.0;
+        this->m_lambdaInit[rowStart +0] = currentForces[i][0];
+        this->m_lambdaInit[rowStart +1] = currentForces[i][1];
+        this->m_lambdaInit[rowStart +2] = currentForces[i][2];
+        this->m_lambdaInit[rowStart +3] = 0.0;
+        this->m_lambdaInit[rowStart +4] = 0.0;
 
         // Sliding momentum: EMA of QP slide outputs.
         // Consistent signals accumulate; noisy signals cancel out.

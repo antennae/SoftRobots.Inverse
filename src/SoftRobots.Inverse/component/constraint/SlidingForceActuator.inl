@@ -504,16 +504,21 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
     Real damping = d_stepDamping.getValue();
     if (damping < 0.0) damping = 0.0;
     if (damping > 1.0) damping = 1.0;
-    
-    for(unsigned int i=0; i<n_triangles; i++) {
-        Real const factor = d_jacobianScaleFactor.getValue();
-        Real const Fx = lambda[ i*s_rowsPerPoint + 0] * factor;
-        Real const Fy = lambda[ i*s_rowsPerPoint + 1] * factor;
-        Real const Fz = lambda[ i*s_rowsPerPoint + 2] * factor;
-        Real dU = lambda[ i*s_rowsPerPoint + 3] * factor;
-        Real dV = lambda[ i*s_rowsPerPoint + 4] * factor;
 
+    unsigned int rowBase = 0;
+    for(unsigned int i=0; i<n_triangles; i++) {
         unsigned int const triangleIdx = m_activeTriangles[i];
+        // Mirror the skip in buildConstraintMatrix so rowBase stays in sync.
+        if (triangleIdx >= triangles.size()) continue;
+
+        Real const factor = d_jacobianScaleFactor.getValue();
+        Real const Fx = lambda[rowBase + 0] * factor;
+        Real const Fy = lambda[rowBase + 1] * factor;
+        Real const Fz = lambda[rowBase + 2] * factor;
+        Real dU = lambda[rowBase + 3] * factor;
+        Real dV = lambda[rowBase + 4] * factor;
+        rowBase += s_rowsPerPoint;  // advance before any inner continue
+
         const Triangle& tri = triangles[triangleIdx];
 
         sofa::type::Vec3 const currentForce = currentForces[i];
