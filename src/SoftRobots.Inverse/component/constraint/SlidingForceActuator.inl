@@ -316,7 +316,7 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         Deriv const v2 = C - A;
         sofa::type::Vec3 nBasis = sofa::type::cross(v1, v2);
         Real const area2 = nBasis.norm();
-        if (area2 > s_squaredEpsilon) nBasis /= area2;
+        if (area2 > s_normEpsilon) nBasis /= area2;
 
         sofa::type::Vec3 e1 = v1;
         e1.normalize();
@@ -326,12 +326,12 @@ void SlidingForceActuator<DataTypes>::buildConstraintMatrix(const ConstraintPara
         // P = A + U*e1 + V*e2
         // We need wA, wB, wC such that P = wA*A + wB*B + wC*C
         // P-A = wB(B-A) + wC(C-A) = wB*v1 + wC*v2
-        
+
         Real v1x = v1 * e1;
         Real const v2x = v2 * e1;
         Real v2y = v2 * e2;
-        if (std::abs(v1x) < s_squaredEpsilon) v1x = 1.0;
-        if (std::abs(v2y) < s_squaredEpsilon) v2y = 1.0;
+        if (std::abs(v1x) < s_normEpsilon) v1x = 1.0;
+        if (std::abs(v2y) < s_normEpsilon) v2y = 1.0;
         Real const det = v1x * v2y;
 
         Real const weightC = local[1] / v2y;
@@ -516,9 +516,9 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         unsigned int const triangleIdx = m_activeTriangles[i];
         const Triangle& tri = triangles[triangleIdx];
 
-        sofa::type::Vec3 const currentForce = d_currentForces.getValue()[i];
+        sofa::type::Vec3 const currentForce = currentForces[i];
         sofa::type::Vec3 gradientForce = currentForce;
-        
+
         // Handle vanishing gradients when force is zero.
         if (gradientForce.norm2() < s_squaredEpsilon) {
             const Coord& A = pos[tri[0]];
@@ -578,15 +578,15 @@ void SlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda, vecto
         Deriv const v2 = C - A;
         sofa::type::Vec3 nBasis = sofa::type::cross(v1, v2);
         Real const area2 = nBasis.norm();
-        if (area2 > s_squaredEpsilon) nBasis /= area2;
+        if (area2 > s_normEpsilon) nBasis /= area2;
         sofa::type::Vec3 e1 = v1; e1.normalize();
         sofa::type::Vec3 const e2 = sofa::type::cross(nBasis, e1);
 
         Real v1x = v1 * e1;
         Real const v2x = v2 * e1;
         Real v2y = v2 * e2;
-        if (std::abs(v1x) < s_squaredEpsilon) v1x = 1.0;
-        if (std::abs(v2y) < s_squaredEpsilon) v2y = 1.0;
+        if (std::abs(v1x) < s_normEpsilon) v1x = 1.0;
+        if (std::abs(v2y) < s_normEpsilon) v2y = 1.0;
 
         Real const weightC = m_activeLocalCoords[i][1] / v2y;
         Real const weightB = (m_activeLocalCoords[i][0] - weightC * v2x) / v1x;

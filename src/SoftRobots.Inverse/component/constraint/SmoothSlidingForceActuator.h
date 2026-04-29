@@ -120,7 +120,8 @@ protected:
     static constexpr unsigned int s_rowsPerPoint = 5;
 
     // Numerical tolerances; chosen empirically, tune if convergence issues arise.
-    static constexpr Real s_squaredEpsilon   = Real(1e-12); // for norm2() / squared-length / area checks
+    static constexpr Real s_squaredEpsilon   = Real(1e-12); // for norm2() / squared-length checks
+    static constexpr Real s_normEpsilon      = Real(1e-9);  // for norm() / linear-length checks
     static constexpr Real s_fallbackForceMag = Real(1e-3);  // fallback magnitude when initForce is zero
 
     sofa::SingleLink<SmoothSlidingForceActuator<DataTypes>, sofa::core::topology::BaseMeshTopology, sofa::core::objectmodel::BaseLink::FLAG_STRONGLINK> d_topology;

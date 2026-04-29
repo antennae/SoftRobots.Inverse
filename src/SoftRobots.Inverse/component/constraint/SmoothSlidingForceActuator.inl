@@ -94,7 +94,7 @@ void SmoothSlidingForceActuator<DataTypes>::initData()
             sumLen += (pos[tri[0]] - pos[tri[2]]).norm();
             count += 3;
         }
-        m_meanEdgeLength = (count > 0 && sumLen > s_squaredEpsilon) ? sumLen / count : 1.0;
+        m_meanEdgeLength = (count > 0 && sumLen > s_normEpsilon) ? sumLen / count : 1.0;
     }
 
     this->m_lambdaInit.assign(this->m_dim, 0.0);
@@ -158,7 +158,7 @@ void SmoothSlidingForceActuator<DataTypes>::updateLimit()
     Real const maxF = this->d_maxForce.isSet() ? this->d_maxForce.getValue() : std::numeric_limits<Real>::max();
     Real const minF = this->d_minForce.isSet() ? this->d_minForce.getValue() : std::numeric_limits<Real>::lowest();
     // Convert mm step size to barycentric units
-    Real const maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
+    Real const maxStep_bary = (m_meanEdgeLength > s_normEpsilon)
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
     Real const maxForceStep = this->d_maxForceStep.getValue();
@@ -254,7 +254,7 @@ void SmoothSlidingForceActuator<DataTypes>::buildConstraintMatrix(const Constrai
             sofa::type::Vec3 const nFace = sofa::type::cross(
                 pos[tri[1]] - pos[tri[0]], pos[tri[2]] - pos[tri[0]]);
             Real const a2 = nFace.norm();
-            smoothF = (a2 > s_squaredEpsilon) ? nFace / a2 : sofa::type::Vec3(0, 0, 1);
+            smoothF = (a2 > s_normEpsilon) ? nFace / a2 : sofa::type::Vec3(0, 0, 1);
         } else {
             smoothF /= smoothFMag;
         }
@@ -338,7 +338,7 @@ void SmoothSlidingForceActuator<DataTypes>::storeResults(vector<double> &lambda,
     WriteAccessor<Data<sofa::type::vector<sofa::type::Vec3>>> currentForces = this->d_currentForces;
     Real const damping = this->d_stepDamping.getValue();
     // Max step in barycentric units (same conversion as updateLimit)
-    Real const maxStep_bary = (m_meanEdgeLength > s_squaredEpsilon)
+    Real const maxStep_bary = (m_meanEdgeLength > s_normEpsilon)
                         ? this->d_maxStepSize.getValue() / m_meanEdgeLength
                         : this->d_maxStepSize.getValue();
 
