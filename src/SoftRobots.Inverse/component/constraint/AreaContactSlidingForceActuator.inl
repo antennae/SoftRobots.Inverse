@@ -188,6 +188,10 @@ bool AreaContactSlidingForceActuator<DataTypes>::radialBarycentric(
 
     Vec3 const p_plane = p_sph * t;
     Real const M_sq = M * M;
+    if (M_sq < s_squaredEpsilon) {
+        alpha = beta = 0;
+        return false;  // degenerate triangle
+    }
 
     alpha = (M * sofa::type::cross(p_plane - v0, v2 - v0)) / M_sq;
     beta  = (M * sofa::type::cross(v1 - v0, p_plane - v0)) / M_sq;

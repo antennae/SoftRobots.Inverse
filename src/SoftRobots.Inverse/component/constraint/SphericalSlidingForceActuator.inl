@@ -172,6 +172,10 @@ bool SphericalSlidingForceActuator<DataTypes>::radialBarycentric(
     // Intersection point on triangle plane
     Vec3 const p_plane = p_sph * t;
     Real const M_sq = M * M;
+    if (M_sq < s_squaredEpsilon) {
+        alpha = beta = 0;
+        return false;  // degenerate triangle
+    }
 
     // Barycentric coords of p_plane w.r.t. (v0, v1, v2):
     // alpha = signed area of sub-triangle (p_plane, v0, v2) / area of full triangle,
