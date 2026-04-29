@@ -588,9 +588,6 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
     Real const baseDamping = this->d_stepDamping.getValue();
     Real const maxStep = this->d_maxStepSize.getValue();
 
-    static unsigned int s_storeCount = 0;
-    ++s_storeCount;
-
     for (unsigned int i = 0; i < m_nbContacts; ++i) {
         Real const factor = this->d_jacobianScaleFactor.getValue();
         Real const Fx = lambda[i*s_rowsPerPoint +0] * factor;
@@ -602,31 +599,6 @@ void SphericalSlidingForceActuator<DataTypes>::storeResults(
         Real const rnP = (i < m_rowNormPhi.size()   && m_rowNormPhi[i]   > s_squaredEpsilon) ? m_rowNormPhi[i]   : Real(1);
         Real dTheta = lambda[i*s_rowsPerPoint +3] * factor / rnT;
         Real dPhi   = lambda[i*s_rowsPerPoint +4] * factor / rnP;
-
-        // ── Diagnostic print (every 10 steps) ──
-        // if (s_storeCount % 10 == 1) {
-        //     Real da_dt, db_dt, da_dp, db_dp;
-        //     computeSlidingJacobian(m_currentTriSpar[i], m_currentTheta[i], m_currentPhi[i],
-        //                            da_dt, db_dt, da_dp, db_dp);
-        //     Vec3 const sF = (m_smoothForces.size() > i) ? m_smoothForces[i] : Vec3(0,0,0);
-        //     Real const sFMag = sF.norm();
-            // std::cout << "[SPAR step=" << s_storeCount << " c=" << i << "] "
-            //           << "tri=" << m_currentTriSpar[i]
-            //           << " theta=" << m_currentTheta[i] << " phi=" << m_currentPhi[i]
-            //           << " alpha=" << m_currentAlpha[i] << " beta=" << m_currentBeta[i]
-            //           << "\n  rawJac: da_dt=" << da_dt << " db_dt=" << db_dt
-            //           << " da_dp=" << da_dp << " db_dp=" << db_dp
-            //           << "\n  rowNorm: theta=" << rnT << " phi=" << rnP
-            //           << " factor=" << factor
-            //           << "\n  lambda_norm: F=(" << lambda[i*5+0] << "," << lambda[i*5+1] << "," << lambda[i*5+2]
-            //           << ") slide=(" << lambda[i*5+3] << "," << lambda[i*5+4] << ")"
-            //           << "\n  physical: F=(" << Fx << "," << Fy << "," << Fz
-            //           << ") dTheta=" << dTheta << " dPhi=" << dPhi
-            //           << "\n  smoothF=(" << sF[0] << "," << sF[1] << "," << sF[2]
-            //           << ") |smoothF|=" << sFMag
-            //           << "\n  pos=" << sphericalToMesh(m_currentTriSpar[i], m_currentAlpha[i], m_currentBeta[i], pos.ref())
-            //           << std::endl;
-        // }
 
         if (std::isnan(Fx + Fy + Fz + dTheta + dPhi)) continue;
 
