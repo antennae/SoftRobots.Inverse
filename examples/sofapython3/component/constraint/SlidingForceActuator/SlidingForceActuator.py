@@ -17,7 +17,7 @@ from common import (INIT_FORCE, INIT_THETA_PHI, RADIUS, MeasurementController,  
 def createScene(rootNode):
     addHeader(rootNode)
     truth = addTruth(rootNode)
-    estimate, force = addEstimate(rootNode)
+    estimate, force = addEstimate(rootNode, truth)
 
     initTriangle = closestTriangle(force.loader, RADIUS * direction(*INIT_THETA_PHI))
     actuator = force.addObject('SlidingForceActuator', name='actuator',
@@ -28,5 +28,5 @@ def createScene(rootNode):
                                showForce=True, visuScale=10)
     force.addObject('BarycentricMapping')
 
-    rootNode.addObject(MeasurementController(name='controller', truth=truth, estimate=estimate, actuator=actuator))
+    estimate.addObject(MeasurementController(name='controller', estimate=estimate, actuator=actuator))
     return rootNode

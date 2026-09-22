@@ -28,7 +28,7 @@ INIT_PRESSURE = AREA_FORCE / (np.pi * INIT_CONTACT_RADIUS ** 2)
 def createScene(rootNode):
     addHeader(rootNode)
     truth = addTruth(rootNode, contactRadius=TRUTH_CONTACT_RADIUS)
-    estimate, force = addEstimate(rootNode)
+    estimate, force = addEstimate(rootNode, truth)
 
     initTheta, initPhi = sparAngles(*INIT_THETA_PHI)
     actuator = force.addObject('AreaContactSlidingForceActuator', name='actuator',
@@ -43,5 +43,5 @@ def createScene(rootNode):
                                showForce=True, visuScale=3)
     force.addObject('BarycentricMapping')
 
-    rootNode.addObject(MeasurementController(name='controller', truth=truth, estimate=estimate, actuator=actuator))
+    estimate.addObject(MeasurementController(name='controller', estimate=estimate, actuator=actuator))
     return rootNode

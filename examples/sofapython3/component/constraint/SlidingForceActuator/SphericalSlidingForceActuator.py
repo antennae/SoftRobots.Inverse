@@ -21,7 +21,7 @@ from common import (INIT_FORCE, INIT_THETA_PHI, MESH_DIR, MeasurementController,
 def createScene(rootNode):
     addHeader(rootNode)
     truth = addTruth(rootNode)
-    estimate, force = addEstimate(rootNode)
+    estimate, force = addEstimate(rootNode, truth)
 
     initTheta, initPhi = sparAngles(*INIT_THETA_PHI)
     actuator = force.addObject('SphericalSlidingForceActuator', name='actuator',
@@ -34,5 +34,5 @@ def createScene(rootNode):
                                showForce=True, visuScale=10)
     force.addObject('BarycentricMapping')
 
-    rootNode.addObject(MeasurementController(name='controller', truth=truth, estimate=estimate, actuator=actuator))
+    estimate.addObject(MeasurementController(name='controller', estimate=estimate, actuator=actuator))
     return rootNode

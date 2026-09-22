@@ -25,8 +25,13 @@ Upon running the scene, two soft spheres are shown side by side:
   positions measured on `groundTruth`, and the actuator (force arrow) starts about 22 mm away from the true location
   and has to slide to it.
 
-A controller in `common.py` copies the marker positions of `groundTruth` into the effector goals at every step and
-prints the location error and the estimated force every 20 steps.
+The two simulations are independent scenes under a root `AnimationLoopParallelScheduler` (MultiThreading
+plugin): `groundTruth` has its own `FreeMotionAnimationLoop` and `NNCGConstraintSolver`, `estimation` its own
+`FreeMotionAnimationLoop` and `QPInverseProblemSolver`, so the inverse solver never sees the forward model. After
+each step the scheduler triggers `DataExchange` components that copy the marker and load positions of
+`groundTruth` into `estimation/measured`, where a `TransformEngine` removes the display offset and the
+`PositionEffector` reads its goals. A controller in `estimation` prints the location error and the estimated
+force every 20 steps.
 
 <!-- ## Making your own scene
 

@@ -9,9 +9,13 @@ Each example solves the same force localization problem on a soft sphere:
     markers toward the positions measured on `groundTruth`, and a sliding force
     actuator has to find where the force is applied and how large it is.
 
+The two simulations are independent: each has its own animation loop and
+constraint solver, and the root `AnimationLoopParallelScheduler` steps them in
+parallel. After every step, `DataExchange` components copy the marker and load
+positions of `groundTruth` into `estimation`, where they drive the effector
+goals. A controller in `estimation` reports the localization error.
+
 The two spheres are drawn side by side (`groundTruth` is shifted by TRUTH_OFFSET).
-A controller feeds the marker positions of `groundTruth` to the effector goals of
-`estimation` at every time step and reports the localization error.
 
 Units: mm, kg, s (forces in mN, Young's modulus in kPa).
 """
@@ -81,8 +85,11 @@ def closestTriangle(loader, point):
 def addHeader(rootNode):
     rootNode.addObject('RequiredPlugin', name='SoftRobots')
     rootNode.addObject('RequiredPlugin', name='SoftRobots.Inverse')
+    rootNode.addObject('RequiredPlugin', name='MultiThreading')  # Needed to use components [AnimationLoopParallelScheduler,DataExchange]
     rootNode.addObject('RequiredPlugin', name='Sofa.Component.AnimationLoop')  # Needed to use components [FreeMotionAnimationLoop]
     rootNode.addObject('RequiredPlugin', name='Sofa.Component.Constraint.Lagrangian.Correction')  # Needed to use components [LinearSolverConstraintCorrection]
+    rootNode.addObject('RequiredPlugin', name='Sofa.Component.Constraint.Lagrangian.Solver')  # Needed to use components [NNCGConstraintSolver]
+    rootNode.addObject('RequiredPlugin', name='Sofa.Component.Engine.Transform')  # Needed to use components [TransformEngine]
     rootNode.addObject('RequiredPlugin', name='Sofa.Component.Constraint.Projective')  # Needed to use components [FixedProjectiveConstraint]
     rootNode.addObject('RequiredPlugin', name='Sofa.Component.Engine.Select')  # Needed to use components [BoxROI]
     rootNode.addObject('RequiredPlugin', name='Sofa.Component.IO.Mesh')  # Needed to use components [MeshSTLLoader,MeshVTKLoader]
@@ -102,8 +109,8 @@ def addHeader(rootNode):
     rootNode.gravity = [0, 0, 0]
     rootNode.dt = 0.01
 
-    rootNode.addObject('FreeMotionAnimationLoop')
-    rootNode.addObject('QPInverseProblemSolver', epsilon=1e-3, tolerance=1e-6, maxIterations=1000)
+    # Steps every child node that owns an animation loop, in parallel, then fires the DataExchange components.
+    rootNode.addObject('AnimationLoopParallelScheduler')
 
 
 def addSphere(parentNode, name, translation=(0.0, 0.0, 0.0), color=(0.7, 0.5, 0.5, 1.0)):
@@ -145,7 +152,10 @@ def addTruth(rootNode, contactRadius=None):
     pressure patch of that radius, with the sigmoid profile assumed by AreaContactSlidingForceActuator.
     The first point of `load.dofs` is always the center of the load.
     """
-    truth = addSphere(rootNode, 'groundTruth', translation=TRUTH_OFFSET, color=(0.5, 0.6, 0.7, 1.0))
+    scene = rootNode.addChild('groundTruth')
+    scene.addObject('FreeMotionAnimationLoop')
+    scene.addObject('NNCGConstraintSolver', tolerance=1e-6, maxIterations=1000)
+    truth = addSphere(scene, 'sphere', translation=TRUTH_OFFSET, color=(0.5, 0.6, 0.7, 1.0))
     addMarkers(truth, translation=TRUTH_OFFSET)
 
     normal = direction(*TRUTH_THETA_PHI)
@@ -172,22 +182,37 @@ def addTruth(rootNode, contactRadius=None):
     load.addObject('ConstantForceField', indices=list(range(len(positions))), forces=np.array(forces).tolist(),
                    showArrowSize=0.02)
     load.addObject('BarycentricMapping')
-    return truth
+    return scene
 
 
-def addEstimate(rootNode):
-    """Inverse simulation: the sphere whose markers are driven toward the measured positions.
+def addEstimate(rootNode, truth):
+    """Inverse simulation: the sphere whose markers are driven toward the positions measured on `truth`.
 
-    Returns the sphere node and the node in which the sliding actuator has to be added. That node holds
+    Returns the scene node and the node in which the sliding actuator has to be added. That node holds
     the surface mesh (topology + MechanicalObject) the actuator slides on.
     """
-    estimate = addSphere(rootNode, 'estimation')
+    estimate = rootNode.addChild('estimation')
+    estimate.addObject('FreeMotionAnimationLoop')
+    estimate.addObject('QPInverseProblemSolver', epsilon=1e-3, tolerance=1e-6, maxIterations=1000)
 
-    markers = addMarkers(estimate, color=(1.0, 1.0, 0.0, 1.0))
+    # Copies of the ground truth data, filled by DataExchange after each step. TransformEngine removes the
+    # display offset so the copies are expressed in the frame of the estimation sphere.
+    measured = estimate.addChild('measured')
+    for name in ['markers', 'load']:
+        node = measured.addChild(name)
+        node.addObject('MechanicalObject', name='dofs', position=truth.sphere.getChild(name).dofs.position.value)
+        node.addObject('TransformEngine', name='here', input_position='@dofs.position',
+                       translation=(-TRUTH_OFFSET).tolist())
+        rootNode.addObject('DataExchange', name='exchange_' + name, template='vector<Vec3d>',
+                           **{'from': f'@groundTruth/sphere/{name}/dofs.position',
+                              'to': f'@estimation/measured/{name}/dofs.position'})
+
+    sphere = addSphere(estimate, 'sphere')
+    markers = addMarkers(sphere, color=(1.0, 1.0, 0.0, 1.0))
     markers.addObject('PositionEffector', name='effector', indices=list(range(NB_MARKERS)),
-                      effectorGoal=markerPositions().tolist())
+                      effectorGoal='@../../measured/markers/here.output_position')
 
-    force = estimate.addChild('force')
+    force = sphere.addChild('force')
     force.addObject('MeshSTLLoader', name='loader', filename=MESH_DIR + 'sphere.stl')
     force.addObject('MeshTopology', name='container', src='@loader')
     force.addObject('MechanicalObject', name='dofs')
@@ -195,24 +220,19 @@ def addEstimate(rootNode):
 
 
 class MeasurementController(Sofa.Core.Controller):
-    """Copies the marker positions of `groundTruth` into the effector goals of `estimation`."""
+    """Reports the localization error of the actuator. Add it to the `estimation` node."""
 
     def __init__(self, *args, **kwargs):
         Sofa.Core.Controller.__init__(self, *args, **kwargs)
-        self.truth = kwargs['truth']
         self.estimate = kwargs['estimate']
         self.actuator = kwargs['actuator']
         self.printEvery = kwargs.get('printEvery', 20)
         self.step = 0
 
     def locationError(self):
-        truthLocation = np.array(self.truth.load.dofs.position.value)[0] - TRUTH_OFFSET
+        truthLocation = np.array(self.estimate.measured.load.here.output_position.value)[0]
         location = np.array(self.actuator.currentLocation.value)[0]
         return float(np.linalg.norm(location - truthLocation))
-
-    def onAnimateBeginEvent(self, event):
-        measured = np.array(self.truth.markers.dofs.position.value) - TRUTH_OFFSET
-        self.estimate.markers.effector.effectorGoal.value = measured.tolist()
 
     def onAnimateEndEvent(self, event):
         self.step += 1
@@ -232,7 +252,7 @@ class MeasurementController(Sofa.Core.Controller):
             print(message)
 
     def patchArea(self, radius):
-        surface = self.estimate.force
+        surface = self.estimate.sphere.force
         triangles = np.array(surface.dofs.position.value)[np.array(surface.container.triangles.value)]
         areas = 0.5 * np.linalg.norm(np.cross(triangles[:, 1] - triangles[:, 0],
                                               triangles[:, 2] - triangles[:, 0]), axis=1)
